@@ -52,6 +52,10 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { -webkit-text-size-adjust: 100%; }
 
+/* The [hidden] attribute must always win, even over display:flex/grid below
+   (author rules otherwise override the UA [hidden]{display:none}). */
+[hidden] { display: none !important; }
+
 body {
   font-family: var(--font);
   color: var(--ink);

@@ -104,3 +104,32 @@ outcome; 3 question buttons; all a11y attributes present.
 Cyber Essentials Plus; admin MFA enforcement; formal WCAG audit + AT testing; UK residency
 verification; at-rest PII encryption; the clinical-review workflow resolving `PENDING_CANCELLATION`;
 response retention period (IG decision).
+
+---
+
+## Relocation + GitHub (2026-05-29)
+- Project **moved out of `Downloads`** into its own folder: `C:\Users\joedr\projects\nhs-waitlist-validation`.
+  (Work from here, NOT Downloads, so the hook/preview fire.)
+- **Git repo initialised + pushed** to a PRIVATE GitHub repo: `https://github.com/77Mediaofficial/NHS-APP`.
+  `main` tracks `origin/main`. Added `.gitignore` (ignores `*/env.js`, media, secrets) + `.gitattributes` (LF).
+- Added turnkey `README.md` (desktop setup: install Claude Code via <https://claude.com/download> or
+  `winget install Anthropic.ClaudeCode`; sign in with the SAME Anthropic account; clone; `copy env.example.js env.js`;
+  reconnect Supabase + Vercel MCP). Daily workflow: pull before, push after.
+- Cross-machine model: git carries code + `.claude/`; it does NOT carry the Claude Code app, MCP account
+  connectors, or system tools (Git/Python) — those are set up once per machine.
+
+## Patient Hub portal scaffold (2026-05-29) — `portal/`
+- New **fully authenticated** patient dashboard (separate from the anon SMS page). Files: `portal/index.html`,
+  `styles.css`, `app.js`, `env.example.js` (+ gitignored `env.js`).
+- Security: NO anon data path; `onAuthStateChange` + `getSession` strictly gate the dashboard; data read is
+  **IDOR-safe** (`from('waitlist_entries').select('*')` with NO user id — RLS on `auth.uid()` isolates);
+  mock NHS Login (button reveals a dev form; **no creds stored in repo**; prod swaps in real OIDC); proxy view
+  is a MOCK (no real cross-patient data); CSP meta + SRI-pinned supabase-js; public URL/anon key only.
+- A11y: elderly-friendly — larger base type, ≥56px targets, skip link, focus-visible, role=status/alert,
+  progressive disclosure, light/dark, reduced-motion.
+- Hook extended to fire on `portal/` (+ auth/RLS/IDOR check line). Preview config adds `portal` (:5700).
+- **OPEN BACKEND DEPENDENCY (fail-closed today):** patients see nothing until `waitlist_entries` gets a
+  `patient_user_id` column linked to the NHS Login identity **and** a policy
+  `FOR SELECT TO authenticated USING (patient_user_id = auth.uid())`. See COMPLIANCE.md §10.
+- Verified locally: app.js syntax OK; assets serve 200; query IDOR-safe; no hardcoded creds. Interactive
+  login→dashboard click-through still to be run in a repo-rooted session (`preview "portal"`, :5700).

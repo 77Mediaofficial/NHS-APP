@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <title>Patient Hub — NHS</title>
+  <meta name="description" content="Securely view your NHS waitlist status and manage your care." />
+
+  <!-- CSP: defence-in-depth (authoritative policy belongs in HTTP headers / vercel.json).
+       connect-src allows Supabase REST + Auth + Realtime (wss). No anon data path here —
+       all reads run under the authenticated user's JWT so RLS isolates the patient. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" />
+
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <main id="main" class="stage">
+
+    <!-- ====================================================================
+         STATE A — LOGGED OUT: stark, secure login screen
+         ==================================================================== -->
+    <section id="login" class="card login" aria-labelledby="loginTitle" hidden>
+      <div class="brand">
+        <div class="brand__mark" aria-hidden="true">
+          <svg viewBox="0 0 80 32" role="img" focusable="false">
+            <rect width="80" height="32" rx="4" fill="currentColor" />
+            <text x="40" y="22" text-anchor="middle" font-family="Arial, sans-serif"
+                  font-weight="700" font-size="16" fill="#ffffff" letter-spacing="0.5">NHS</text>
+          </svg>
+        </div>
+        <p class="brand__trust">Guildford &amp; Surrey NHS Foundation Trust</p>
+      </div>
+
+      <p class="eyebrow">Patient Hub</p>
+      <h1 id="loginTitle" class="headline">Your care,<br /><em>in one place.</em></h1>
+      <p class="lede">
+        Sign in securely to see your waiting list status, prepare for your
+        procedure, and manage care for the people you look after.
+      </p>
+
+      <button id="nhsLogin" class="btn btn--primary" type="button">
+        <span class="btn__label">Sign in with NHS&nbsp;Login</span>
+        <span class="btn__chevron" aria-hidden="true">→</span>
+      </button>
+
+      <!-- DEV/MOCK sign-in. In production this whole block is removed: the button
+           above redirects to the real NHS Login OIDC provider. For local testing we
+           reveal a form so YOU type test credentials — none are stored in the repo. -->
+      <form id="devSignin" class="devform" hidden>
+        <p class="devform__note">Mock NHS Login (local testing only)</p>
+        <label class="field">
+          <span class="field__label">Email</span>
+          <input id="devEmail" class="field__input" type="email" autocomplete="username"
+                 inputmode="email" required />
+        </label>
+        <label class="field">
+          <span class="field__label">Password</span>
+          <input id="devPassword" class="field__input" type="password"
+                 autocomplete="current-password" required />
+        </label>
+        <button id="devSubmit" class="btn btn--primary" type="submit">
+          <span class="btn__label">Sign in</span>
+        </button>
+      </form>
+
+      <p id="loginError" class="error" role="alert" hidden></p>
+      <p class="login__legal">This is a secure NHS service. Your session is encrypted and your
+        data is visible only to you.</p>
+    </section>
+
+    <!-- ====================================================================
+         STATE B — LOGGED IN: patient dashboard
+         ==================================================================== -->
+    <section id="dashboard" class="dash" aria-labelledby="greeting" hidden>
+
+      <header class="dash__bar">
+        <div class="brand brand--inline">
+          <div class="brand__mark brand__mark--sm" aria-hidden="true">
+            <svg viewBox="0 0 80 32" role="img" focusable="false">
+              <rect width="80" height="32" rx="4" fill="currentColor" />
+              <text x="40" y="22" text-anchor="middle" font-family="Arial, sans-serif"
+                    font-weight="700" font-size="16" fill="#ffffff" letter-spacing="0.5">NHS</text>
+            </svg>
+          </div>
+        </div>
+
+        <div class="dash__bar-actions">
+          <!-- Proxy view: switch to caring for a dependent. MOCK ONLY — real proxy
+               access requires verified authorisation + its own RLS + Caldicott consent. -->
+          <div class="proxy">
+            <button id="proxyToggle" class="proxy__toggle" type="button"
+                    role="switch" aria-checked="false" aria-label="Proxy view: care for a dependent">
+              <span class="proxy__track" aria-hidden="true"><span class="proxy__thumb"></span></span>
+              <span class="proxy__text">Proxy view</span>
+            </button>
+          </div>
+          <button id="signOut" class="btn btn--ghost" type="button">Sign out</button>
+        </div>
+      </header>
+
+      <!-- Proxy banner (hidden unless proxy view is on) -->
+      <p id="proxyBanner" class="proxy-banner" role="status" hidden></p>
+
+      <h1 id="greeting" class="dash__greeting">Hello.</h1>
+
+      <!-- PRIMARY: Waitlist status -->
+      <section class="panel panel--primary" aria-labelledby="wlTitle">
+        <div class="panel__head">
+          <h2 id="wlTitle" class="panel__title">Your waiting list</h2>
+          <span id="wlStatus" class="status-chip" data-status="">—</span>
+        </div>
+
+        <p class="panel__lead">
+          <span id="wlProcedure" class="wl-procedure">Loading your procedure…</span>
+        </p>
+
+        <!-- Progressive disclosure: detail is tucked behind a control -->
+        <details class="disclose">
+          <summary class="disclose__summary">
+            <span>What does this mean?</span>
+            <span class="disclose__icon" aria-hidden="true">+</span>
+          </summary>
+          <div class="disclose__body">
+            <dl class="kv">
+              <div class="kv__row"><dt>Status</dt><dd id="wlStatusText">—</dd></div>
+              <div class="kv__row"><dt>Referred</dt><dd id="wlReferred">—</dd></div>
+              <div class="kv__row"><dt>Hospital</dt><dd id="wlHospital">—</dd></div>
+            </dl>
+            <p class="disclose__help">
+              If your symptoms change, contact the number on your appointment letter.
+            </p>
+          </div>
+        </details>
+      </section>
+
+      <!-- SECONDARY: Pre-op checklist -->
+      <section class="panel" aria-labelledby="checkTitle">
+        <div class="panel__head">
+          <h2 id="checkTitle" class="panel__title">Get ready for your procedure</h2>
+        </div>
+        <ul class="checklist" id="checklist">
+          <li class="check"><span class="check__box" aria-hidden="true">✓</span>
+            <span class="check__text">Confirm your contact details are up to date</span></li>
+          <li class="check"><span class="check__box" aria-hidden="true">✓</span>
+            <span class="check__text">Read your pre-operative information leaflet</span></li>
+          <li class="check check--todo"><span class="check__box" aria-hidden="true"></span>
+            <span class="check__text">Arrange transport home for the day of surgery</span></li>
+          <li class="check check--todo"><span class="check__box" aria-hidden="true"></span>
+            <span class="check__text">Complete your health questionnaire</span></li>
+        </ul>
+      </section>
+
+      <p id="dashError" class="error" role="alert" hidden></p>
+    </section>
+
+  </main>
+
+  <!-- Supabase JS — version-pinned + Subresource Integrity (NCSC supply-chain control).
+       Bump version + hash together on upgrade. -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.106.2"
+    integrity="sha384-4Cjkyy4cE1EgIS0C+Y3xzGmJ2noQFRRU91yKAW8IxtPfVtbQXPMqadSc3sYnjwou"
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"></script>
+  <!-- Runtime config: PUBLIC url + anon key only (env.js is gitignored; see env.example.js). -->
+  <script src="env.js"></script>
+  <script src="app.js?v=20260529" defer></script>
+</body>
+</html>

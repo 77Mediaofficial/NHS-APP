@@ -19,8 +19,8 @@ import json
 import re
 
 MESSAGE = (
-    "NHS COMPLIANCE BACK-CHECK REQUIRED. You just edited a file under frontend/ "
-    "or supabase/. Before considering this change done, run the COMPLIANCE.md "
+    "NHS COMPLIANCE BACK-CHECK REQUIRED. You just edited a file under frontend/, "
+    "supabase/, or portal/. Before considering this change done, run the COMPLIANCE.md "
     "change-review ritual (project root):\n"
     "  1. Which COMPLIANCE.md sections does this change touch?\n"
     "  2. Does it introduce or alter a clinical hazard? -> update Section 1 "
@@ -33,6 +33,9 @@ MESSAGE = (
     "alignment (Section 5).\n"
     "  5. Check the frontend<->backend contract guard (token param name, error "
     "codes, response enum).\n"
+    "  5b. PORTAL (authenticated) change? -> no anon data path; reads rely on "
+    "auth.uid() via RLS with NO user id in the query (IDOR-safe); no secrets/PII "
+    "in the client; auth state strictly gates the dashboard.\n"
     "  6. Update the status markers in COMPLIANCE.md in the SAME change.\n"
     "Do not describe the system as 'compliant' - only 'built to align with "
     "[standard], pending [DPO/Caldicott/CSO] sign-off'."
@@ -56,8 +59,8 @@ def main():
     )
     path = str(path).replace("\\", "/")
 
-    # Match a frontend/ or supabase/ path segment (case-insensitive, Windows-safe).
-    if re.search(r"(^|/)(frontend|supabase)(/|$)", path, re.IGNORECASE):
+    # Match a frontend/, supabase/, or portal/ path segment (case-insensitive, Windows-safe).
+    if re.search(r"(^|/)(frontend|supabase|portal)(/|$)", path, re.IGNORECASE):
         print(json.dumps({
             "hookSpecificOutput": {
                 "hookEventName": "PostToolUse",

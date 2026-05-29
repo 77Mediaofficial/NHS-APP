@@ -185,6 +185,35 @@ Five-pillar routing (where each pillar is evidenced in this repo):
 - ❌ **FHIR standard APIs.** No FHIR surface today. If the waitlist integrates with PAS/e-RS or
   exposes data to other systems, use HL7 FHIR UK Core resources. Future / separate workstream.
 
+## 10. Patient Hub portal (authenticated) — `portal/` ⚠️
+*A separate, fully authenticated patient dashboard. Unlike the SMS validation page, it has
+**no anonymous data path** — every read runs under the signed-in user's JWT so RLS isolates them.*
+
+- ✅ **Strict auth gating.** `onAuthStateChange` + `getSession` route the UI: no session ⇒ login
+  screen only; the dashboard is never shown without a session.
+- ✅ **IDOR-safe reads.** The data query (`from('waitlist_entries').select('*')`) passes **no user id**;
+  isolation is enforced server-side by RLS on `auth.uid()`. No client-supplied identifier chooses whose data loads.
+- ✅ **Fail-closed today (secure by default).** There is currently **no patient SELECT policy** on
+  `waitlist_entries`, so a logged-in patient sees **nothing** until the backend is extended. The portal
+  handles this gracefully (friendly empty state).
+- 🚫 **BACKEND DEPENDENCY (before it can show real data):** add (a) a `patient_user_id` link from
+  `waitlist_entries` to the NHS Login identity, and (b) `CREATE POLICY ... FOR SELECT TO authenticated
+  USING (patient_user_id = auth.uid())`. Without this it stays empty (by design).
+- ⚠️ **Mock NHS Login.** The "Sign in with NHS Login" button simulates OIDC; for local testing it
+  reveals a form where the tester types their own credentials. **No credentials are stored in the repo.**
+  Production must swap in the real NHS Login OIDC provider (`signInWithOAuth`) — 👤 integration + assurance.
+- 🚫👤 **Proxy view is a MOCK.** Caring-for-a-dependent access shows a placeholder banner only and fetches
+  no one else's data. Real proxy access requires a verified proxy relationship, its own RLS, and
+  **Caldicott-approved consent** (see §3).
+- ✅ **No secrets in client / CSP / SRI.** Only the public URL + anon key (`portal/env.js`, gitignored);
+  defence-in-depth CSP meta; SRI-pinned `supabase-js@2.106.2`.
+- ✅ **Accessibility (WCAG 2.2 AA aim).** Elderly-friendly: larger base type, ≥56px touch targets,
+  skip link, `:focus-visible`, `role="status"`/`alert`, progressive disclosure, reduced-motion, light/dark.
+  Still ❌ formal audit + AT testing (shared with §5).
+- ⚠️ **DPIA scope.** Patient-facing authenticated access to health data must be covered by the §2 DPIA.
+- ❌ **Session hygiene for shared/elderly devices** — define idle-timeout / explicit sign-out guidance.
+- *Interactive login→dashboard click-through to be verified in the repo-rooted session (preview "portal", :5700).*
+
 ---
 
 ## Frontend↔backend contract checks (regression guard)
@@ -229,3 +258,14 @@ _Last reviewed: 2026-05-29._
 - **Not done (Trust-only, unchanged):** CSO/Hazard Log/CSCR, DPIA, DSPT, Caldicott, CREST pen test,
   Cyber Essentials Plus, admin MFA enforcement, formal WCAG audit, UK residency verification,
   at-rest PII encryption, the clinical-review workflow that resolves `PENDING_CANCELLATION`.
+
+**Changelog — 2026-05-29 (Patient Hub portal scaffold):**
+- §10 — New authenticated `portal/` (login + dashboard). No anon path; `onAuthStateChange` gates the UI;
+  IDOR-safe read (no user id in query — RLS on `auth.uid()`); mock NHS Login (no stored creds);
+  proxy view is a mock; CSP + SRI + public-key-only config (`portal/env.js`, gitignored). Elderly-friendly a11y.
+- Compliance hook extended to also fire on `portal/` edits (+ an auth/RLS/IDOR check line).
+- Preview config gains a `portal` server (:5700).
+- **Fail-closed today:** no patient SELECT policy on `waitlist_entries` yet, so patients see nothing until the
+  backend adds `patient_user_id` + `USING (patient_user_id = auth.uid())`. **Open backend dependency.**
+- Verified: app.js syntax OK, assets serve 200, query is IDOR-safe, no hardcoded creds. Interactive
+  click-through pending in a repo-rooted session.

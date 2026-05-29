@@ -18,6 +18,7 @@
 # Copy env.example.js -> env.js locally; env.js is ignored so a real key can
 # never be pushed by accident.
 frontend/env.js
+portal/env.js
 
 # ---- Supabase local state --------------------------------------------------
 .supabase/

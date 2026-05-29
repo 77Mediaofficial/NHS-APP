@@ -21,16 +21,17 @@ gates that code cannot close. Re-score on each material change. Last scored: 202
 
 | Pillar | Weight | Readiness | Why |
 |---|---|---|---|
-| 1. Clinical safety | 25% | ~32 | Hazards mitigated in code + status-domain prereq migration; **no CSO, no formal Hazard Log / Clinical Safety Case Report** 👤 |
+| 1. Clinical safety | 25% | ~33 | Hazards mitigated in code + status-domain prereq migration; **FORCE RLS on `waitlist_entries` now makes the `WITH CHECK (status = 'PENDING_CANCELLATION')` enforceable**; **no CSO, no formal Hazard Log / Clinical Safety Case Report** 👤 |
 | 2. Data protection | 25% | ~45 | Data-minimisation + **token auto-purge, IG-gated response purge, hospital-scoped erasure RPC** now built; **no DPIA, no DSPT, no Caldicott, residency unverified, no at-rest encryption** 👤 |
-| 3. Technical security | 20% | ~60 | SRI, CSP, HSTS, hardening headers, forced RLS, single-use tokens, definer hardening, **SSCoP self-declaration, scoped token-link generator**; **no CREST pen test, no Cyber Essentials Plus, admin MFA unverified** 👤 |
-| 4. Interoperability | 10% | ~30 | NHS Number modulus-11 **validator built + ready** (SQL + TS) though N/A in current PII-free scope; no FHIR surface |
+| 3. Technical security | 20% | ~62 | SRI, CSP, HSTS, hardening headers, **FORCE RLS on waitlist_entries (clinical-safety enforceable), base schema with need-to-know postgres policies**, single-use tokens, definer hardening, **SSCoP self-declaration, scoped token-link generator**; **no CREST pen test, no Cyber Essentials Plus, admin MFA unverified** 👤 |
+| 4. Interoperability | 10% | ~35 | NHS Number modulus-11 **validator built + active as a DB CHECK constraint** on `waitlist_entries.nhs_number`; TS util ready at edge ingest; no FHIR surface |
 | 5. Usability & accessibility | 20% | ~50 | Keyboard, skip-link, focus mgmt, status roles, **contrast measured ≥AA, accessibility statement drafted**; **no formal audit, no screen-reader test, AIS unaddressed** |
 
-**Weighted overall readiness ≈ 44 / 100** (up from ~37 after the no-Trust completion pass).
-Engineering-controls-only sub-score ≈ 90/100 — the code is in strong shape; the ceiling is now
-almost entirely human/organisational sign-offs + external certifications that only the Trust can
-start. **Do not describe as "compliant" at any score.**
+**Weighted overall readiness ≈ 45 / 100** (up from ~44 after base-schema + RLS hardening pass).
+Engineering-controls-only sub-score ≈ 95/100 — base schema is now fully in repo, FORCE RLS
+enforces the clinical-safety WITH CHECK, NHS number validated at the DB level. The ceiling is now
+almost entirely human/organisational sign-offs + external certifications only the Trust can start.
+**Do not describe as "compliant" at any score.**
 
 ## Status legend
 - ✅ Done / control in place
@@ -47,7 +48,7 @@ start. **Do not describe as "compliant" at any score.**
 - 🚫👤 **Clinical Safety Officer assigned** and Hazard Log + Clinical Safety Case Report opened.
 - ⚠️ **HAZARD (mitigated in code — pending CSO review): instant irreversible auto-cancel.**
   Previously a single tap on *"I no longer need this"* set `status = 'CANCELLED'` outright.
-  **Now mitigated by two independent layers:**
+  **Now mitigated by three independent layers:**
   (1) **Frontend confirmation gate** (`frontend/app.js`, `NEEDS_CONFIRMATION`) — decline never
       submits on a single tap; the safe *"No, keep my place"* option is listed first and
       receives focus, so a mis-tap / wrong recipient cannot one-tap a cancellation.
@@ -55,6 +56,9 @@ start. **Do not describe as "compliant" at any score.**
       the entry to the **reversible** `PENDING_CANCELLATION` state for mandatory clinical review.
       Policy `pol_entries_update_definer` is locked to `WITH CHECK (status = 'PENDING_CANCELLATION')`,
       so this unauthenticated path can *never* write `CANCELLED`.
+  (3) **FORCE ROW LEVEL SECURITY** on `waitlist_entries` (`20260528000000_base_schema.sql`) —
+      ensures the postgres-role SECURITY DEFINER function is subject to the `WITH CHECK` policy
+      above. Without `FORCE`, the postgres owner bypasses RLS and the check is never evaluated.
   **Still open before go-live:** (a) define + own the clinical-review workflow that resolves
   `PENDING_CANCELLATION` → `CANCELLED`/reinstated; (b) ⚠️ a prerequisite migration
   (`20260528120000_waitlist_status_pending_cancellation.sql`, dated to run FIRST) now introspects
@@ -176,12 +180,13 @@ Five-pillar routing (where each pillar is evidenced in this repo):
 - ❌ Incident-response & breach-notification path defined (72-hour ICO clock).
 
 ## 9. Interoperability — DTAC v2 ⚠️
-- ✅/➖ **NHS Number modulus-11 validation.** *Not applicable in the current patient-facing layer*
-  (the public form holds **zero PII / no NHS Number** — only a UUID token; see §2). A reusable
-  validator is now **built and ready at the ingest boundary**: SQL `is_valid_nhs_number(text)`
-  (IMMUTABLE, migration `20260529050000`, usable as a CHECK constraint) + TS `isValidNhsNumber()` /
-  `normaliseNhsNumber()` (`supabase/functions/_shared/nhs-number.ts`) for edge ingest workers.
-  Pending: apply at the actual boundary if/when NHS Number is ingested, and document where it lives.
+- ✅ **NHS Number modulus-11 validation.** *Not applicable in the patient-facing layer*
+  (the public form holds **zero PII / no NHS Number** — only a UUID token; see §2). The validator
+  is **built and active**: SQL `is_valid_nhs_number(text)` (IMMUTABLE, migration `20260529050000`)
+  is applied as `CHECK (nhs_number IS NULL OR is_valid_nhs_number(nhs_number))` on
+  `waitlist_entries.nhs_number` — invalid NHS Numbers are rejected at the DB level on any ingest.
+  TS `isValidNhsNumber()` / `normaliseNhsNumber()` (`supabase/functions/_shared/nhs-number.ts`)
+  available for edge ingest workers.
 - ❌ **FHIR standard APIs.** No FHIR surface today. If the waitlist integrates with PAS/e-RS or
   exposes data to other systems, use HL7 FHIR UK Core resources. Future / separate workstream.
 
@@ -199,7 +204,7 @@ Five-pillar routing (where each pillar is evidenced in this repo):
 3. Does it move, log, or expose any PII? → re-check §2, §3, §6, §7.
 4. Update the status markers here in the same commit.
 
-_Last reviewed: 2026-05-29._
+_Last reviewed: 2026-05-29 (base-schema + RLS hardening pass)._
 
 **Changelog — 2026-05-29 (NHS guideline back-check):**
 - §1 — Mitigated the instant-irreversible auto-cancel hazard: added a frontend confirmation gate
@@ -212,6 +217,20 @@ _Last reviewed: 2026-05-29._
 - §5 — Added Accessible Information Standard (DCB1605).
 - §9 — New Interoperability section (NHS Number modulus-11 N/A in the PII-free layer; FHIR future).
 - Contract check — `?t=` / `?token=` aligned in `app.js`.
+
+**Changelog — 2026-05-29 (base-schema + RLS hardening pass):**
+- §1 — Added third mitigation layer for instant-cancel hazard: `FORCE ROW LEVEL SECURITY` on
+  `waitlist_entries` (base schema) makes the section-11 `WITH CHECK (status = 'PENDING_CANCELLATION')`
+  policy actually enforced for the postgres-role SECURITY DEFINER function. Without FORCE, the check
+  was syntactically present but never evaluated. Clinical safety strengthened.
+- §3/§6 — Base schema (`20260528000000_base_schema.sql`) now in repo: `hospitals`,
+  `waitlist_entries`, `hospital_staff`, `sms_dispatch_jobs`, `auth.current_hospital_id()`,
+  `get_next_sms_batch()`, postgres-role SELECT policy for SECURITY DEFINER scope, `updated_at`
+  trigger. All downstream migrations can now apply to an empty project without assumed upstream.
+- §9 — NHS Number `CHECK` constraint now **active** on `waitlist_entries.nhs_number`
+  (migration `20260529050000` now applies it; previously commented out). Invalid NHS Numbers
+  are rejected at the DB level on any import or insert.
+- Engineering sub-score: ~90 → ~95; DTAC overall: ~44 → ~45.
 
 **Changelog — 2026-05-29 (no-Trust completion pass — everything closeable without the Trust):**
 - §1 — Added prerequisite migration `20260528120000` that introspects `waitlist_entries.status` and

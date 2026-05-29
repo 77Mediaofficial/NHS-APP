@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "frontend",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5500", "--directory", "frontend"],
+      "port": 5500
+    },
+    {
+      "name": "status",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5600", "--directory", "project-status"],
+      "port": 5600
+    }
+  ]
+}

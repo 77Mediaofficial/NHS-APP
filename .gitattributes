@@ -1,0 +1,14 @@
+# Normalise line endings across machines (laptop ↔ desktop) so files don't show
+# as "modified" just from CRLF/LF differences. Text files stored as LF in the repo.
+* text=auto eol=lf
+
+# Treat binaries as binary (never normalise)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.mp4 binary
+*.mov binary
+*.zip binary
+*.pdf binary

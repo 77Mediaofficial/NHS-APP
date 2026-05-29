@@ -1,0 +1,32 @@
+# A string used to distinguish different Supabase projects on the same host. Defaults to the working directory name.
+project_id = "nhs-waitlist-validation"
+
+[api]
+port = 54321
+# Extracted from your SQL schema setup
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+# NHS standard requires at least PG15 for some advanced JSONB and security features
+major_version = 15
+
+[db.pooler]
+enabled = true
+port = 54329
+pool_mode = "transaction"
+default_pool_size = 20
+max_client_conn = 100
+
+[edge_runtime]
+enabled = true
+port = 54328
+
+# ── Function Configurations ───────────────────────────────────────────────────
+
+[functions.sms-dispatch-worker]
+# Disables JWT verification since this is invoked by pg_cron (database internal),
+# not by an authenticated frontend client.
+verify_jwt = false

@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(curl -s -o NUL -w \"%{http_code}\" http://127.0.0.1:5500/index.html)",
+      "Bash(curl -s http://127.0.0.1:5500/app.js)",
+      "Bash(findstr /C:\"submit_validation_response\")",
+      "Bash(python -c \"import json; d=json.load\\(open\\('.claude/settings.local.json'\\)\\); h=d['hooks']['PostToolUse'][0]; assert h['matcher']=='Write|Edit|MultiEdit'; c=h['hooks'][0]; assert c['type']=='command'; print\\('VALID JSON. matcher=',h['matcher']\\); print\\('command=',c['command']\\)\")",
+      "Bash(curl -s \"https://data.jsdelivr.com/v1/packages/npm/@supabase/supabase-js/resolved?specifier=2\")",
+      "Bash(openssl version *)",
+      "Bash(node --check frontend/app.js)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/compliance_backcheck.py\"",
+            "timeout": 15,
+            "statusMessage": "NHS compliance back-check"
+          }
+        ]
+      }
+    ]
+  }
+}

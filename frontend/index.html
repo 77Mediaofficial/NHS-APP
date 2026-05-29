@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <title>Waitlist Validation — NHS</title>
+  <meta name="description" content="Confirm whether you still need your scheduled NHS procedure." />
+  <!-- Content-Security-Policy: defense-in-depth. The AUTHORITATIVE policy is the HTTP
+       response header set in vercel.json (a meta CSP cannot enforce frame-ancestors). -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; connect-src 'self' https://*.supabase.co; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#question">Skip to the question</a>
+  <main class="stage">
+    <section class="card">
+
+      <!-- Placeholder NHS Trust Logo -->
+      <div class="brand">
+        <div class="brand__mark" aria-hidden="true">
+          <svg viewBox="0 0 80 32" role="img" focusable="false">
+            <rect width="80" height="32" rx="4" fill="currentColor" />
+            <text x="40" y="22" text-anchor="middle"
+                  font-family="Arial, sans-serif" font-weight="700"
+                  font-size="16" fill="#ffffff" letter-spacing="0.5">NHS</text>
+          </svg>
+        </div>
+        <p class="brand__trust">Guildford &amp; Surrey NHS Foundation Trust</p>
+      </div>
+
+      <!-- ===== Question state ===== -->
+      <div id="question" class="question">
+        <p class="eyebrow">Waitlist validation</p>
+        <h1 class="headline">Are you still waiting for your<br /><em>Total Hip Replacement?</em></h1>
+        <p class="lede">
+          Your answer helps us keep your place on the list accurate and offer
+          appointments to the people who need them most. It takes one tap.
+        </p>
+
+        <div class="actions" role="group" aria-label="Choose the option that applies to you">
+          <button class="choice choice--affirm" data-response="confirm" type="button">
+            <span class="choice__body">
+              <span class="choice__title">Yes, I still need my appointment</span>
+              <span class="choice__note">Keep my place on the waiting list</span>
+            </span>
+            <span class="choice__chevron" aria-hidden="true">→</span>
+          </button>
+
+          <button class="choice choice--urgent" data-response="worsened" type="button">
+            <span class="choice__body">
+              <span class="choice__title">My symptoms have gotten worse</span>
+              <span class="choice__note">Flag my case for clinical review</span>
+            </span>
+            <span class="choice__chevron" aria-hidden="true">→</span>
+          </button>
+
+          <button class="choice choice--decline" data-response="decline" type="button">
+            <span class="choice__body">
+              <span class="choice__title">I no longer need this procedure</span>
+              <span class="choice__note">Ask to come off the list — we'll confirm first</span>
+            </span>
+            <span class="choice__chevron" aria-hidden="true">→</span>
+          </button>
+        </div>
+
+        <p id="error" class="error" role="alert" hidden></p>
+      </div>
+
+      <!-- ===== Confirmation gate for the irreversible "decline" (hidden by default) =====
+           DCB0129/0160 mitigation: a destructive response is never sent on a single tap.
+           The safe option ("keep my place") is listed first and receives focus. -->
+      <div id="confirm" class="confirm" role="group" aria-labelledby="confirmTitle" aria-describedby="confirmDesc" tabindex="-1" hidden>
+        <p class="eyebrow">Please confirm</p>
+        <h2 class="confirm__title" id="confirmTitle">Come off the waiting list?</h2>
+        <p class="confirm__text" id="confirmDesc">
+          This tells your care team you no longer need your Total Hip Replacement.
+          A clinician reviews every request before your place is removed, and you can
+          still change your mind by calling the number on your appointment letter.
+        </p>
+        <div class="actions">
+          <button class="choice choice--affirm" id="confirmNo" type="button">
+            <span class="choice__body">
+              <span class="choice__title">No, keep my place</span>
+              <span class="choice__note">Go back without making changes</span>
+            </span>
+            <span class="choice__chevron" aria-hidden="true">→</span>
+          </button>
+          <button class="choice choice--decline" id="confirmYes" type="button">
+            <span class="choice__body">
+              <span class="choice__title">Yes, ask to be removed</span>
+              <span class="choice__note">Send to my care team for review</span>
+            </span>
+            <span class="choice__chevron" aria-hidden="true">→</span>
+          </button>
+        </div>
+        <p id="confirmError" class="error" role="alert" hidden></p>
+      </div>
+
+      <!-- ===== Success state (hidden by default) =====
+           role="status" + aria-live announce the outcome to assistive tech when it
+           appears; tabindex="-1" lets us move focus here after submission. -->
+      <div id="success" class="success" role="status" aria-live="polite" tabindex="-1" hidden>
+        <div class="success__tick" aria-hidden="true">
+          <svg viewBox="0 0 52 52" focusable="false">
+            <circle class="success__ring" cx="26" cy="26" r="24" fill="none" />
+            <path class="success__check" fill="none" d="M14 27l8 8 16-18" />
+          </svg>
+        </div>
+        <h2 class="success__title">Thank you.</h2>
+        <p class="success__text">Your hospital record has been updated.</p>
+        <p id="successDetail" class="success__detail"></p>
+      </div>
+
+    </section>
+
+    <footer class="legal">
+      <p>This is a secure NHS service. Your response is recorded against your validated record only.</p>
+    </footer>
+  </main>
+
+  <!-- Supabase JS client — VERSION-PINNED + Subresource Integrity (NCSC supply-chain control).
+       A floating @2 tag cannot be SRI-protected because its bytes change on each release.
+       Hash computed against this exact pinned URL; bump version + hash together on upgrade.
+       Stronger alternative for the Trust to consider: self-host this file under /vendor/. -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.106.2"
+    integrity="sha384-4Cjkyy4cE1EgIS0C+Y3xzGmJ2noQFRRU91yKAW8IxtPfVtbQXPMqadSc3sYnjwou"
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"></script>
+  <!-- Runtime config (window.__ENV). Holds ONLY the public Supabase URL + anon key,
+       which are public-by-design. Replaced at deploy time. NEVER put the service-role
+       key here. Loaded before app.js; see env.example.js for the template. -->
+  <script src="env.js"></script>
+  <script src="app.js?v=20260529b" defer></script>
+</body>
+</html>

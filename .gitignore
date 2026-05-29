@@ -1,0 +1,56 @@
+# ============================================================================
+# NHS Waitlist Validation — .gitignore
+# Keep this repo PRIVATE. Never commit secrets (service-role key, DB password):
+# those live ONLY in Supabase / Vercel settings, never in source control.
+# ============================================================================
+
+# ---- Secrets / credentials (NEVER commit) ----------------------------------
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*secret*
+*service-role*
+*service_role*
+
+# Runtime config holds env-specific public keys — committed template only.
+# Copy env.example.js -> env.js locally; env.js is ignored so a real key can
+# never be pushed by accident.
+frontend/env.js
+
+# ---- Supabase local state --------------------------------------------------
+.supabase/
+supabase/.branches/
+supabase/.temp/
+
+# ---- Node (if tooling is added later) --------------------------------------
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---- Build / deploy output -------------------------------------------------
+dist/
+build/
+.vercel/
+
+# ---- Large media / binaries (don't sync through git) -----------------------
+*.mp4
+*.mov
+*.heic
+*.HEIC
+*.zip
+*.7z
+
+# ---- OS / editor cruft -----------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.idea/
+.vscode/
+
+# NOTE: .claude/ IS tracked on purpose so the compliance hook + project config
+# travel to your other machine. settings.local.json contains no secrets here.

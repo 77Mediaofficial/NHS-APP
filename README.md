@@ -43,7 +43,12 @@ you set up once per machine:
 - **Git** — `winget install Git.Git`
 - **Python 3** (used by the compliance hook and the local preview) — `winget install Python.Python.3.12`
   - The hook calls `python`, so make sure `python --version` works in a fresh terminal.
-- **Claude Code** (the editor/agent we work in).
+- **Claude Code** — the agent we work in. Any one of:
+  - **Desktop app (easiest — GUI, no terminal):** download for Windows from <https://claude.com/download>
+  - **PowerShell:** `irm https://claude.ai/install.ps1 | iex`
+  - **WinGet:** `winget install Anthropic.ClaudeCode`
+  - Requires a Claude **Pro / Max / Team** (or Console/API) account — the free plan doesn't include Claude Code.
+  - After install, open this project folder in the Desktop app (or run `claude` in it from a terminal) and **sign in with the same Anthropic account you use on the laptop**, so your plan, skills, and connectors come with you. Check it with `claude doctor`.
 
 ### 2. Clone the repo
 ```bash
@@ -55,12 +60,13 @@ copy frontend\env.example.js frontend\env.js     # macOS/Linux: cp frontend/env.
 Supabase URL + anon key; fill those in when the backend exists. Until then the app runs
 in a safe local "dev-mock" mode.
 
-### 3. Reconnect your MCP connectors in Claude Code
-These live in your Claude account, not the repo, so connect them again on the desktop:
+### 3. Reconnect your MCP connectors
+Connector/MCP setup is stored per machine (under `~/.claude`), not in the repo. After signing
+in with the same account, most account connectors reappear; reconnect any that don't:
 - **Supabase** (database/migrations) and **Vercel** (deploy) — the two needed for this app.
 - Plus any others you use (Gmail, Drive, Notion, etc.) — personal, not required to build the app.
 
-Once those three are done, the desktop behaves exactly like the laptop: same hook, same
+Once those three steps are done, the desktop behaves exactly like the laptop: same hook, same
 preview servers, same files.
 
 ## Running locally

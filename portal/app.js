@@ -166,8 +166,16 @@
     db.auth.getSession().then(({ data }) => route(data.session))
       .catch(() => showLoginView());
   } else {
-    // Dev preview: start logged out.
-    showLoginView();
+    // Dev preview (no backend configured). `?demo=1` jumps straight to a mock
+    // dashboard so the authenticated view is previewable without a real session.
+    // DEV-ONLY: this whole branch runs only when Supabase is NOT configured, so it
+    // can never bypass real authentication in a deployed (configured) environment.
+    const params = new URLSearchParams(location.search);
+    if (params.get("demo")) {
+      route({ user: { email: "joe@example.nhs.uk", user_metadata: { full_name: "Joe" } } });
+    } else {
+      showLoginView();
+    }
   }
 
   // ---- Login interactions -------------------------------------------------

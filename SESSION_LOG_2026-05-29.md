@@ -131,5 +131,17 @@ response retention period (IG decision).
 - **OPEN BACKEND DEPENDENCY (fail-closed today):** patients see nothing until `waitlist_entries` gets a
   `patient_user_id` column linked to the NHS Login identity **and** a policy
   `FOR SELECT TO authenticated USING (patient_user_id = auth.uid())`. See COMPLIANCE.md §10.
-- Verified locally: app.js syntax OK; assets serve 200; query IDOR-safe; no hardcoded creds. Interactive
-  login→dashboard click-through still to be run in a repo-rooted session (`preview "portal"`, :5700).
+- Verified locally: app.js syntax OK; assets serve 200; query IDOR-safe; no hardcoded creds.
+
+**Portal — live preview + fixes (2026-05-29, later):**
+- **Bug found & fixed:** author `display:flex` on `.dash`/`.devform` overrode the UA `[hidden]{display:none}`,
+  so the dashboard + dev form leaked onto the login screen. Added `[hidden]{display:none!important}` to
+  `portal/styles.css`. (Caught by actually viewing the preview.)
+- **Dev preview shortcut:** `portal/app.js` now supports `?demo=1` (DEV-ONLY — only when Supabase is NOT
+  configured) to jump straight to a mock dashboard for previewing. Bumped `app.js?v=20260529b`.
+- **Verified the full flow live** (devMock): login-only on load; Sign in with NHS Login → dev form → submit
+  → dashboard hydrates (Hello, Joe · Total Hip Replacement · Active · 2 March 2026 · Royal Surrey County Hospital);
+  `?demo=1` lands directly on the dashboard.
+- Preview served on **:5701** via a TEMPORARY `Downloads/.claude/launch.json` shim (this session only; the
+  project + its real `.claude/launch.json` (`portal` :5700) live in the repo). Sandbox occasionally reaps the
+  dev server — just re-run `preview "portal"`. Screenshot tool was unreliable; verification done via DOM eval.

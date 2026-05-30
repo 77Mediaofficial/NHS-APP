@@ -25,6 +25,10 @@ portal/env.js
 supabase/.branches/
 supabase/.temp/
 
+# ---- Python (tools/) -------------------------------------------------------
+__pycache__/
+*.pyc
+
 # ---- Node (if tooling is added later) --------------------------------------
 node_modules/
 npm-debug.log*

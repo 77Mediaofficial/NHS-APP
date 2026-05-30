@@ -269,3 +269,13 @@ _Last reviewed: 2026-05-29._
   backend adds `patient_user_id` + `USING (patient_user_id = auth.uid())`. **Open backend dependency.**
 - Verified: app.js syntax OK, assets serve 200, query is IDOR-safe, no hardcoded creds. Interactive
   click-through pending in a repo-rooted session.
+
+**Changelog — 2026-05-30 (automatic change ledger):**
+- The compliance hook now **auto-appends an audit row to `COMPLIANCE_CHANGELOG.md` on every file change**
+  (deterministic trail of timestamp · tool · file · scope) — the part a script can do reliably. It still
+  injects the curated back-check reminder for `frontend/`/`supabase/`/`portal/` edits, because deciding
+  whether a change alters a hazard / touches PII / changes a §-status is a judgement, not something a script
+  may auto-write into this checklist (auto-writing a "compliant" claim would breach the honesty rule).
+- `.gitattributes`: `COMPLIANCE_CHANGELOG.md merge=union` so concurrent appends from two machines never conflict.
+- Hook self-skips the ledger file; malformed input → exit 0 (never blocks an edit). Verified via a 4-case test.
+- Process note: each substantive change still gets a curated §-update here, by me, in the same change.

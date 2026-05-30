@@ -42,7 +42,7 @@
   .big{font-size:2rem;font-weight:700;letter-spacing:-.02em}
   .meter{margin:12px 0 6px;height:12px;border-radius:99px;background:#e7e9ee;overflow:hidden}
   .meter__fill{height:100%;border-radius:99px}
-  .fill-eng{width:90%;background:linear-gradient(90deg,#006a4e,#2fbf93)}
+  .fill-eng{width:95%;background:linear-gradient(90deg,#006a4e,#2fbf93)}
   .fill-dtac{width:44%;background:linear-gradient(90deg,#b8421f,#e08a3c)}
   .meter-card p{font-size:.8rem;color:var(--soft)}
 
@@ -126,24 +126,22 @@
   </div>
 
   <div class="note" style="background:var(--pend-bg);border-color:#e7b9a6;border-left-color:var(--pend)">
-    <b>Backend not provisioned yet.</b> There is no Supabase project for this app. The only projects on the
-    account (77MEDIAOFFICIAL) are unrelated and in <b>eu-west-1 (Ireland)</b>. Before anything can be applied
-    or deployed: (1) create a Supabase project in <b>London — eu-west-2</b> (UK residency, §7; can't be changed
-    later); (2) scaffold the <b>base schema</b> (<code>waitlist_entries</code>, <code>hospitals</code>,
-    <code>auth.current_hospital_id()</code>, <code>sms_dispatch_jobs</code>) — it is assumed upstream and is
-    <b>not in this repo</b>, so our migrations can't apply to an empty project until it exists.
+    <b>Backend not provisioned yet.</b> There is no Supabase project for this app. Before anything can be
+    applied or deployed: create a Supabase project in <b>London — eu-west-2</b> (UK residency, §7; region
+    can't be changed after creation). The full migration chain including the base schema is now in this repo
+    and ready to apply the moment the project exists.
   </div>
 
   <div class="meters">
     <div class="meter-card">
       <h4>Engineering build</h4>
-      <div class="big" style="color:var(--done)">≈ 90<span style="font-size:1rem;color:var(--faint)">/100</span></div>
+      <div class="big" style="color:var(--done)">≈ 95<span style="font-size:1rem;color:var(--faint)">/100</span></div>
       <div class="meter"><div class="meter__fill fill-eng"></div></div>
-      <p>All <em>code</em> closeable without the Trust is done (retention/erasure, NHS-number validator, token generator, accessibility pass, secure-SDLC declaration). Not yet provisioned: no Supabase project + base schema still to scaffold.</p>
+      <p>All <em>code</em> closeable without the Trust is done: base schema, retention/erasure, NHS-number validator (active as DB constraint), token generator, accessibility pass, secure-SDLC declaration. Not yet provisioned: no Supabase project.</p>
     </div>
     <div class="meter-card">
       <h4>DTAC v2 submission readiness</h4>
-      <div class="big" style="color:var(--pend)">≈ 44<span style="font-size:1rem;color:var(--faint)">/100</span></div>
+      <div class="big" style="color:var(--pend)">≈ 45<span style="font-size:1rem;color:var(--faint)">/100</span></div>
       <div class="meter"><div class="meter__fill fill-dtac"></div></div>
       <p>Self-assessment, not a pass (up from ~37). The ceiling is now almost entirely governance/external gates (CSO, DPIA, DSPT, pen test, CE+).</p>
     </div>
@@ -155,10 +153,10 @@
     <table>
       <thead><tr><th>Pillar</th><th>Wt</th><th>Score</th><th>Why</th></tr></thead>
       <tbody>
-        <tr><td>1 · Clinical safety</td><td>25%</td><td class="score s-lo">32</td><td class="why">Hazards mitigated in code + status-domain prerequisite migration. No CSO, no formal Hazard Log / Clinical Safety Case Report.</td></tr>
+        <tr><td>1 · Clinical safety</td><td>25%</td><td class="score s-lo">33</td><td class="why">Hazards mitigated in code + status-domain prerequisite migration. FORCE RLS on waitlist_entries makes WITH CHECK enforceable. No CSO, no formal Hazard Log / Clinical Safety Case Report.</td></tr>
         <tr><td>2 · Data protection</td><td>25%</td><td class="score s-mid">45</td><td class="why">Data-minimisation + token auto-purge, IG-gated response purge, hospital-scoped erasure RPC now built. No DPIA, no DSPT, no Caldicott, residency unverified, no at-rest encryption.</td></tr>
-        <tr><td>3 · Technical security</td><td>20%</td><td class="score s-mid">60</td><td class="why">SRI, CSP, HSTS, hardening headers, forced RLS, single-use tokens, definer hardening, SSCoP self-declaration, scoped token generator. No CREST pen test, no Cyber Essentials Plus, admin MFA unverified.</td></tr>
-        <tr><td>4 · Interoperability</td><td>10%</td><td class="score s-lo">30</td><td class="why">NHS Number modulus-11 validator built + ready (SQL + TS), though N/A in current PII-free scope. No FHIR surface.</td></tr>
+        <tr><td>3 · Technical security</td><td>20%</td><td class="score s-mid">62</td><td class="why">SRI, CSP, HSTS, hardening headers, FORCE RLS + postgres-scoped definer policies, single-use tokens, definer hardening, SSCoP self-declaration, scoped token generator. No CREST pen test, no Cyber Essentials Plus, admin MFA unverified.</td></tr>
+        <tr><td>4 · Interoperability</td><td>10%</td><td class="score s-lo">35</td><td class="why">NHS Number modulus-11 validator active as a DB CHECK constraint on waitlist_entries.nhs_number. TS util ready at edge. No FHIR surface.</td></tr>
         <tr><td>5 · Usability &amp; accessibility</td><td>20%</td><td class="score s-mid">50</td><td class="why">Keyboard, skip-link, focus mgmt, status roles, contrast measured ≥AA, accessibility statement drafted. No formal audit, no screen-reader test, AIS unaddressed.</td></tr>
       </tbody>
     </table>
@@ -307,7 +305,7 @@
   <div class="next">
     <ul>
       <li><span class="num h">①</span><div><b>(You) Create the Supabase project — London `eu-west-2`.</b> Not set up yet. Region is permanent and must be UK for §7. Share only the public Project URL + anon key; never the service-role key or DB password.</div></li>
-      <li><span class="num">②</span><div><b>(Code, ready when you are) Scaffold the base schema</b> — <code>waitlist_entries</code>, <code>hospitals</code>, <code>auth.current_hospital_id()</code>, <code>sms_dispatch_jobs</code> + <code>get_next_sms_batch</code>. Not in repo today; required before our migrations apply.</div></li>
+      <li><span class="num" style="background:var(--done)">✓</span><div><b>Base schema is in repo</b> — <code>20260528000000_base_schema.sql</code> scaffolds <code>hospitals</code>, <code>waitlist_entries</code> (FORCE RLS), <code>hospital_staff</code>, <code>sms_dispatch_jobs</code>, <code>auth.current_hospital_id()</code>, <code>get_next_sms_batch()</code>. Apply it first once the London project exists.</div></li>
       <li><span class="num">③</span><div><b>Config</b> — write <code>frontend/env.js</code> from <code>env.example.js</code> with the public URL + anon key (mechanism built).</div></li>
       <li><span class="num">④</span><div><b>Apply migrations</b> — <code>supabase db push</code>: base schema → status-domain prereq → section-11 → retention/erasure → NHS-number → token generator. Re-read the status-domain NOTICE to confirm the domain widened.</div></li>
       <li><span class="num">⑤</span><div><b>Issue links + enqueue</b> — <code>issue_validation_token()</code> per patient → populate <code>sms_dispatch_jobs.payload_link</code>.</div></li>
@@ -319,7 +317,7 @@
     <p class="legend"><b>① / ⑥ / “A” (purple)</b> = needs you or human authority (account creation, CSO / DPO / Caldicott / external assurance) — cannot be closed by code alone. Steps ②–⑤ are ready to run the moment the London project exists.</p>
   </div>
 
-  <footer>NHS Waitlist Validation · engineering status as of 29 May 2026 · backend not yet provisioned · single source of truth: <code>COMPLIANCE.md</code></footer>
+  <footer>NHS Waitlist Validation · engineering status as of 29 May 2026 · base schema in repo · backend not yet provisioned · single source of truth: <code>COMPLIANCE.md</code></footer>
 </div>
 </body>
 </html>

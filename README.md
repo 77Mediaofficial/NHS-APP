@@ -84,9 +84,10 @@ ritual (does this touch a clinical hazard? PII? update the status markers?). It'
 no-op for other files. **Requires `python` on PATH.**
 
 ## Migrations (apply in this order)
-1. **Base schema — TODO, not yet in repo.** `waitlist_entries` (with `hospital_id`, `status`),
-   `hospitals`, `auth.current_hospital_id()`, `sms_dispatch_jobs` + `get_next_sms_batch`.
-   These are assumed upstream; an empty project needs them scaffolded first.
+1. `20260528000000_base_schema.sql` — scaffolds `hospitals`, `hospital_staff`,
+   `waitlist_entries` (with `hospital_id`, `status`, FORCE RLS), `sms_dispatch_jobs`,
+   `auth.current_hospital_id()`, `get_next_sms_batch()`, and the `updated_at` trigger.
+   **Run this first on any empty project.**
 2. `20260528120000_waitlist_status_pending_cancellation.sql` — ensures `status` permits the
    reversible `PENDING_CANCELLATION` soft-state (clinical-safety prerequisite).
 3. `20260529000000_section_11_tokens_rpc.sql` — tokens, responses, RLS, the secure RPC.

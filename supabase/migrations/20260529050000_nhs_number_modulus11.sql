@@ -63,7 +63,11 @@ COMMENT ON FUNCTION is_valid_nhs_number(TEXT) IS
 -- Pure function, no data access — safe to expose broadly.
 GRANT EXECUTE ON FUNCTION is_valid_nhs_number(TEXT) TO PUBLIC;
 
--- Example usage at a future ingest boundary (commented — apply where appropriate):
---   ALTER TABLE waitlist_entries
---     ADD CONSTRAINT chk_nhs_number_mod11
---     CHECK (nhs_number IS NULL OR is_valid_nhs_number(nhs_number));
+-- Apply the validator as a CHECK constraint on waitlist_entries.nhs_number.
+-- NULL is allowed (not every entry may have an NHS Number at creation time).
+-- This runs after the base schema (20260528000000) so is_valid_nhs_number() exists.
+ALTER TABLE waitlist_entries
+    DROP CONSTRAINT IF EXISTS chk_nhs_number_mod11;
+ALTER TABLE waitlist_entries
+    ADD CONSTRAINT chk_nhs_number_mod11
+    CHECK (nhs_number IS NULL OR is_valid_nhs_number(nhs_number));

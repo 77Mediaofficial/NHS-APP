@@ -2,26 +2,49 @@
 """
 NHS compliance back-check hook (PostToolUse).
 
-Fires after Write/Edit/MultiEdit. If the edited file lives under frontend/ or
-supabase/, it injects a reminder (additionalContext) that the change MUST be
-back-checked against COMPLIANCE.md before being considered done.
+Fires after Write/Edit/MultiEdit. Two jobs:
+
+  (A) AUTOMATIC AUDIT LEDGER (deterministic — happens every time, never skipped).
+      Appends a timestamped row to COMPLIANCE_CHANGELOG.md for EVERY file change.
+      This is the part a script can do reliably: an immutable trail of what changed
+      and when (supports DSPT / IG audit expectations).
+
+  (B) CURATED BACK-CHECK REMINDER (judgement — for the model/human to action).
+      When the change touches frontend/, supabase/, or portal/, it injects the
+      COMPLIANCE.md change-review ritual. A script must NOT auto-write compliance
+      *claims* into the curated checklist — deciding whether a change introduces a
+      clinical hazard / touches PII / changes a §-status requires reasoning, and an
+      auto-written "compliant" line would violate the project's honesty rule.
 
 This exists because the user mandated: "BACK CHECK AGAINST THEIR REQUIREMENTS
-CONSTANTLY WITHOUT FAIL." A standing model preference cannot reliably enforce
-that across sessions; a deterministic hook can.
+CONSTANTLY WITHOUT FAIL" and "UPDATE OUR CHECKLIST EVERY TIME A CHANGE IS MADE."
 
-Contract: read hook JSON on stdin; emit a JSON object on stdout with
-hookSpecificOutput.additionalContext when in scope; otherwise emit nothing.
-Always exit 0 so a parsing hiccup never blocks the edit.
+Contract: read hook JSON on stdin; append to the ledger; emit JSON on stdout with
+hookSpecificOutput.additionalContext when in scope. Always exit 0 so any hiccup
+never blocks the edit.
 """
 import sys
+import os
 import json
 import re
+import datetime
+
+LEDGER_NAME = "COMPLIANCE_CHANGELOG.md"
+
+LEDGER_HEADER = (
+    "# Compliance change ledger (AUTO-GENERATED — do not edit by hand)\n\n"
+    "> Appended automatically by `.claude/hooks/compliance_backcheck.py` on every\n"
+    "> file change (PostToolUse). This is the deterministic audit trail. The curated\n"
+    "> compliance status lives in `COMPLIANCE.md`; this file only records THAT a change\n"
+    "> happened, never a compliance judgement.\n\n"
+    "| Timestamp (UTC) | Tool | File | Scope |\n"
+    "|---|---|---|---|\n"
+)
 
 MESSAGE = (
     "NHS COMPLIANCE BACK-CHECK REQUIRED. You just edited a file under frontend/, "
-    "supabase/, or portal/. Before considering this change done, run the COMPLIANCE.md "
-    "change-review ritual (project root):\n"
+    "supabase/, or portal/. An audit row was auto-appended to COMPLIANCE_CHANGELOG.md. "
+    "Now run the COMPLIANCE.md change-review ritual (project root):\n"
     "  1. Which COMPLIANCE.md sections does this change touch?\n"
     "  2. Does it introduce or alter a clinical hazard? -> update Section 1 "
     "Hazard Log (DCB0129 / DCB0160). The instant irreversible auto-cancel "
@@ -41,6 +64,41 @@ MESSAGE = (
     "[standard], pending [DPO/Caldicott/CSO] sign-off'."
 )
 
+IN_SCOPE_RE = re.compile(r"(^|/)(frontend|supabase|portal)(/|$)", re.IGNORECASE)
+
+
+def project_root():
+    """Prefer CLAUDE_PROJECT_DIR; else derive from this script's location
+    (<root>/.claude/hooks/this_file.py)."""
+    env = os.environ.get("CLAUDE_PROJECT_DIR")
+    if env:
+        return env.replace("\\", "/").rstrip("/")
+    here = os.path.abspath(__file__).replace("\\", "/")
+    # .../.claude/hooks/compliance_backcheck.py -> up three
+    return "/".join(here.split("/")[:-3])
+
+
+def relativise(path, root):
+    p = path.replace("\\", "/")
+    r = root.replace("\\", "/").rstrip("/")
+    if r and p.lower().startswith(r.lower() + "/"):
+        return p[len(r) + 1:]
+    return p
+
+
+def append_ledger(root, tool_name, rel_path, in_scope):
+    ledger = os.path.join(root, LEDGER_NAME).replace("\\", "/")
+    ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    scope = "frontend/supabase/portal" if in_scope else "other"
+    # Escape pipes so the markdown table never breaks.
+    safe_path = rel_path.replace("|", "\\|")
+    row = f"| {ts} | {tool_name} | {safe_path} | {scope} |\n"
+    exists = os.path.exists(ledger)
+    with open(ledger, "a", encoding="utf-8") as fh:
+        if not exists:
+            fh.write(LEDGER_HEADER)
+        fh.write(row)
+
 
 def main():
     raw = sys.stdin.read()
@@ -49,18 +107,35 @@ def main():
     except (ValueError, TypeError):
         return  # never block on bad input
 
+    tool_name = data.get("tool_name") or data.get("toolName") or "Edit"
     tool_input = data.get("tool_input") or {}
-    # Write/Edit use file_path; be defensive about alternatives.
     path = (
         tool_input.get("file_path")
         or tool_input.get("filePath")
         or tool_input.get("path")
         or ""
     )
-    path = str(path).replace("\\", "/")
+    if not path:
+        return
 
-    # Match a frontend/, supabase/, or portal/ path segment (case-insensitive, Windows-safe).
-    if re.search(r"(^|/)(frontend|supabase|portal)(/|$)", path, re.IGNORECASE):
+    root = project_root()
+    rel = relativise(str(path), root)
+
+    # Never log the ledger's own writes (the hook writes it directly, not via a
+    # tool, so there's no real recursion — but skip it to avoid meta-noise).
+    if rel.replace("\\", "/").lower().endswith(LEDGER_NAME.lower()):
+        return
+
+    in_scope = bool(IN_SCOPE_RE.search(rel))
+
+    # (A) Always record the change in the audit ledger.
+    try:
+        append_ledger(root, str(tool_name), rel, in_scope)
+    except Exception:
+        pass  # the ledger must never block an edit
+
+    # (B) In-scope changes also get the curated back-check reminder.
+    if in_scope:
         print(json.dumps({
             "hookSpecificOutput": {
                 "hookEventName": "PostToolUse",

@@ -2,6 +2,10 @@
 # as "modified" just from CRLF/LF differences. Text files stored as LF in the repo.
 * text=auto eol=lf
 
+# Auto-generated append-only audit ledger: union-merge so concurrent appends from
+# two machines never conflict (git keeps both sides' new lines automatically).
+COMPLIANCE_CHANGELOG.md merge=union
+
 # Treat binaries as binary (never normalise)
 *.png binary
 *.jpg binary

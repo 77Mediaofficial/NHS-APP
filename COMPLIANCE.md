@@ -291,3 +291,14 @@ _Last reviewed: 2026-05-29._
 - Light-only per Service Manual: `color-scheme` meta aligned to `light` to avoid dark native controls.
 - Cache-bust `styles.css?v=20260530`. **Caveat:** "official NHS palette" ≠ NHS-accredited; real NHS
   brand/identity use requires permission, and the logo remains a placeholder.
+
+**Changelog — 2026-05-30 (MASTER bundle tooling):**
+- Added `tools/build_master.py` → generates `MASTER.md`, a single read-only bundle of all 29 git-tracked
+  text files with a TOC, for easy review/handover. Regenerate with `python tools/build_master.py`.
+- **Secret-safe by construction:** it bundles only git-tracked files, so the gitignored `env.js` is excluded;
+  verified no real keys (only `%%` placeholders) and no self-recursion. The one `SUPABASE_SERVICE_ROLE_KEY`
+  string in the bundle is the dispatch worker's `Deno.env.get(...)` *read* — the secret value is never in source.
+- `tools/` is outside `frontend/`/`supabase/`/`portal/`, so it carries no compliance surface of its own.
+- Correction note: an earlier draft this session referenced two files (`20260529070000_patient_portal_rls.sql`,
+  `portal/vercel.json`) that **do not exist** — those were hallucinated and never committed; no false claim
+  landed in the repo (verified: 29 tracked files, working tree clean).

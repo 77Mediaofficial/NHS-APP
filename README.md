@@ -9,6 +9,12 @@ and confirms whether they still need their scheduled procedure. Static frontend
 > requires the Trust's Clinical Safety Officer, Data Protection Officer, and Caldicott
 > Guardian sign-off. See `COMPLIANCE.md` for the living status (single source of truth).
 
+> 📦 **Everything in one file:** `MASTER.md` is an auto-generated, read-only bundle of every
+> source file (with a table of contents) — handy for review, handover, or pasting into a fresh
+> session. Regenerate any time with `python tools/build_master.py`. The individual files remain
+> the source of truth; `MASTER.md` never contains secrets (only git-tracked files are bundled, so
+> the gitignored `env.js` is excluded).
+
 ---
 
 ## Repository layout

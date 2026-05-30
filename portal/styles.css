@@ -1,164 +1,193 @@
 /* =========================================================================
-   NHS Patient Hub — "Refined visual storytelling"
-   Authenticated portal. Mobile-first. Elderly-friendly: larger base type,
-   generous touch targets (>=56px), high-contrast, calm spacing, progressive
-   disclosure. Shares the waitlist app's token language for brand consistency.
+   NHS Patient Hub — styles.css
+   "Refined visual storytelling": calm, spacious, high-end (Monzo/Revolut feel)
+   built strictly on the OFFICIAL NHS palette + WCAG 2.2 AA rules.
+
+   Built to ALIGN WITH the NHS Digital Service Manual + WCAG 2.2 AA — not an
+   accredited/branded NHS product. Logo here is a placeholder; real NHS identity
+   use requires brand permission. Contrast ratios below were computed against AA
+   (4.5:1 normal text); confirm in a formal audit.
+
+   Light-only by design: the NHS Service Manual specifies a light UI (NHS Pale
+   Grey body, white cards). `color-scheme: light` keeps native form controls light.
    ========================================================================= */
 
 :root {
-  --ink:        #0b1220;   /* near-black, high-contrast text */
-  --ink-soft:   #51596a;   /* secondary text — AA on white */
-  --line:       #e7e9ee;
-  --surface:    #ffffff;
-  --surface-2:  #fbfcfd;   /* raised panel tint */
-  --canvas:     #f4f6f8;
+  /* ---- Official NHS palette ------------------------------------------- */
+  --nhs-blue:        #005EB8;  /* Primary. On white ≈ 5.6:1 (AA). */
+  --nhs-dark-blue:   #003087;  /* Hover/active for primary. On white ≈ 10.9:1. */
+  --nhs-bright-blue: #0072CE;  /* Accents/links if needed. */
+  --nhs-black:       #212B32;  /* Body text. On white ≈ 14.5:1. */
+  --nhs-grey-1:      #4C6272;  /* Secondary text. On white ≈ 6.0:1 (AA). */
+  --nhs-pale-grey:   #E8EDEE;  /* Page background. */
+  --nhs-mid-grey:    #AEB7BD;  /* Borders/dividers (decorative). */
+  --nhs-white:       #FFFFFF;  /* Elevated cards. */
+  --nhs-green:       #007F3B;  /* Success. On white ≈ 5.1:1 (AA). */
+  --nhs-red:         #DA291C;  /* Destructive/error. White-on-red ≈ 4.8:1 (AA). */
+  --nhs-yellow:      #FFEB3B;  /* Focus indicator (NHS focus state). */
+  --nhs-warm-yellow: #FFB81C;  /* Reserved (warnings). */
 
-  --affirm:     #006a4e;   /* NHS green */
-  --affirm-bg:  #e6f4ef;
-  --urgent:     #a8341a;   /* AA-safe warm red */
-  --info:       #1d4ed8;
+  /* Semantic aliases */
+  --ink:        var(--nhs-black);
+  --ink-soft:   var(--nhs-grey-1);
+  --line:       #D8DDE0;       /* hairline on white (≈ subtle, decorative) */
+  --surface:    var(--nhs-white);
+  --canvas:     var(--nhs-pale-grey);
+  --primary:    var(--nhs-blue);
+  --primary-press: var(--nhs-dark-blue);
+  --focus:      var(--nhs-yellow);
 
-  --focus:      #1d4ed8;
-  --shadow:     0 1px 2px rgba(11,18,32,.05), 0 10px 30px rgba(11,18,32,.07);
-  --shadow-lift:0 2px 6px rgba(11,18,32,.08), 0 20px 48px rgba(11,18,32,.12);
+  /* ---- Soft-UI shadows (depth without harsh borders) ------------------ */
+  --shadow:      0 1px 2px rgba(33,43,50,.06), 0 6px 18px rgba(33,43,50,.08);
+  --shadow-lift: 0 2px 6px rgba(33,43,50,.10), 0 14px 34px rgba(33,43,50,.14);
 
-  --radius:     20px;
-  --radius-sm:  14px;
+  /* ---- Radius / motion / spacing ------------------------------------- */
+  --radius:     8px;           /* cards (per brief) */
+  --radius-lg:  12px;          /* hero container */
+  --radius-sm:  6px;           /* inputs / chips */
   --ease:       cubic-bezier(.2,.7,.2,1);
+  --tap:        48px;          /* minimum touch target (elderly-friendly) */
 
-  --tap:        56px;      /* minimum touch target */
+  --font: "Inter", Arial, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          Roboto, Helvetica, sans-serif;
 
-  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          Helvetica, Arial, sans-serif;
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --ink:      #f3f5f8;
-    --ink-soft: #a7b0bf;     /* AA on dark surfaces */
-    --line:     #232a36;
-    --surface:  #12161e;
-    --surface-2:#161b25;
-    --canvas:   #090c12;
-    --affirm:   #34c897;
-    --affirm-bg:#0f2a22;
-    --urgent:   #f08a6b;
-    --info:     #7aa2ff;
-    --shadow:     0 1px 2px rgba(0,0,0,.45), 0 12px 32px rgba(0,0,0,.4);
-    --shadow-lift:0 2px 6px rgba(0,0,0,.55), 0 22px 52px rgba(0,0,0,.55);
-  }
-}
-
+/* ---- Reset -------------------------------------------------------------- */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { -webkit-text-size-adjust: 100%; }
 
-/* The [hidden] attribute must always win, even over display:flex/grid below
-   (author rules otherwise override the UA [hidden]{display:none}). */
+/* The [hidden] attribute MUST always win — author display:flex/grid below would
+   otherwise override the UA [hidden]{display:none} and leak hidden views. */
 [hidden] { display: none !important; }
 
 body {
   font-family: var(--font);
   color: var(--ink);
   background: var(--canvas);
-  /* Larger base for older eyes; everything scales from here */
-  font-size: clamp(1.0625rem, 0.95rem + 0.5vw, 1.1875rem);
+  /* Fluid base type: comfortable for older eyes; everything scales from here. */
+  font-size: clamp(1.0625rem, 0.98rem + 0.45vw, 1.1875rem);
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-/* ---- Skip link --------------------------------------------------------- */
+/* ---- Skip link (WCAG 2.4.1) — visible only on focus -------------------- */
 .skip-link {
-  position: absolute; left: 12px; top: -64px; z-index: 20;
+  position: absolute; left: 12px; top: -64px; z-index: 30;
   padding: 12px 16px; background: var(--surface); color: var(--ink);
-  border: 1px solid var(--line); border-radius: var(--radius-sm);
-  text-decoration: none; transition: top .15s var(--ease);
+  border-radius: var(--radius-sm); text-decoration: none; font-weight: 600;
+  box-shadow: var(--shadow); transition: top .15s var(--ease);
 }
-.skip-link:focus-visible { top: 12px; outline: 3px solid var(--focus); outline-offset: 2px; }
+.skip-link:focus-visible { top: 12px; }
 
-/* ---- Layout shell ------------------------------------------------------ */
+/* ---- Global focus indicator (WCAG 2.2 — keyboard navigation) -----------
+   Never `outline:none` without a high-contrast replacement. NHS-style focus:
+   a black inner ring + yellow outer ring, so it's visible on white, blue, or
+   any coloured surface. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--nhs-yellow);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 3px var(--nhs-black);
+  border-radius: 4px;
+}
+
+/* ---- Layout shell (mobile-first) -------------------------------------- */
 .stage {
   min-height: 100svh;
   display: flex; flex-direction: column; justify-content: center;
   gap: 18px;
-  padding: clamp(20px, 5vw, 40px) clamp(16px, 4vw, 28px);
+  padding: clamp(20px, 5vw, 44px) clamp(16px, 4vw, 28px);
   padding-top: max(24px, env(safe-area-inset-top));
   padding-bottom: max(24px, env(safe-area-inset-bottom));
 }
 
-/* ---- Brand ------------------------------------------------------------- */
-.brand { margin-bottom: 26px; }
-.brand--inline { margin: 0; }
-.brand__mark { color: var(--affirm); width: 68px; }
-.brand__mark--sm { width: 52px; }
-.brand__mark svg { display: block; width: 100%; height: auto; }
-.brand__trust { margin-top: 12px; font-size: .875rem; font-weight: 500; color: var(--ink-soft); }
-
-/* ---- Type -------------------------------------------------------------- */
-.eyebrow {
-  font-size: .8125rem; font-weight: 600; text-transform: uppercase;
-  letter-spacing: .14em; color: var(--ink-soft); margin-bottom: 14px;
-}
-.headline {
-  font-size: clamp(2rem, 7vw, 2.6rem); line-height: 1.12;
-  letter-spacing: -0.025em; font-weight: 700; margin-bottom: 18px;
-}
-.headline em { font-style: normal; color: var(--affirm); }
-.lede { font-size: 1.0625rem; color: var(--ink-soft); max-width: 44ch; margin-bottom: 30px; }
-
 /* ---- Card (login) ------------------------------------------------------ */
 .card {
   width: 100%; max-width: 520px; margin: 0 auto;
-  background: var(--surface); border: 1px solid var(--line);
-  border-radius: var(--radius); box-shadow: var(--shadow);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
   padding: clamp(26px, 7vw, 44px);
   animation: rise .4s var(--ease) both;
 }
 
-/* ---- Buttons (big touch targets) -------------------------------------- */
+/* ---- Brand (NHS logo lockup) ------------------------------------------ */
+.brand { margin-bottom: 26px; }
+.brand--inline { margin: 0; }
+.brand__mark { color: var(--nhs-blue); width: 68px; }   /* blue box, white "NHS" */
+.brand__mark--sm { width: 52px; }
+.brand__mark svg { display: block; width: 100%; height: auto; }
+.brand__trust { margin-top: 12px; font-size: .9375rem; font-weight: 600; color: var(--ink-soft); }
+
+/* ---- Type -------------------------------------------------------------- */
+.eyebrow {
+  font-size: .8125rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .12em; color: var(--ink-soft); margin-bottom: 14px;
+}
+.headline {
+  font-size: clamp(2rem, 1.4rem + 3vw, 2.6rem); line-height: 1.12;
+  letter-spacing: -0.02em; font-weight: 700; color: var(--ink); margin-bottom: 18px;
+}
+.headline em { font-style: normal; color: var(--nhs-blue); }   /* NHS-blue accent */
+.lede { font-size: 1.0625rem; color: var(--ink-soft); max-width: 44ch; margin-bottom: 30px; }
+
+/* ---- Buttons ----------------------------------------------------------- */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 12px;
   width: 100%; min-height: var(--tap);
-  padding: 16px 22px; border-radius: var(--radius-sm); border: 1px solid transparent;
-  font-family: inherit; font-size: 1.125rem; font-weight: 600; cursor: pointer;
-  transition: transform .16s var(--ease), box-shadow .16s var(--ease),
-              background-color .16s var(--ease), border-color .16s var(--ease);
+  padding: 14px 22px; border-radius: var(--radius); border: 2px solid transparent;
+  font-family: inherit; font-size: 1.0625rem; font-weight: 600; cursor: pointer;
+  transition: background-color .2s var(--ease), border-color .2s var(--ease),
+              transform .2s var(--ease), box-shadow .2s var(--ease);
 }
-.btn--primary { background: var(--affirm); color: #fff; box-shadow: var(--shadow); }
+/* Primary — solid NHS blue, white text (≈ 5.6:1) */
+.btn--primary { background: var(--primary); color: #fff; box-shadow: var(--shadow); }
+.btn--primary:hover { background: var(--primary-press); }       /* darker blue */
+/* Secondary — outlined */
 .btn--ghost {
-  width: auto; min-height: 48px; padding: 10px 16px; font-size: 1rem;
-  background: transparent; color: var(--ink); border-color: var(--line);
+  width: auto; min-height: var(--tap); padding: 11px 18px; font-size: 1rem;
+  background: var(--surface); color: var(--nhs-blue); border-color: var(--nhs-blue);
 }
+.btn--ghost:hover { background: #eef4fb; }
+/* Destructive — solid NHS red, white text (≈ 4.8:1) */
+.btn--danger { background: var(--nhs-red); color: #fff; }
+.btn--danger:hover { background: #b71f14; }
+
 @media (hover: hover) {
-  .btn--primary:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); }
-  .btn--ghost:hover { border-color: var(--ink-soft); }
+  .btn--primary:hover, .btn--danger:hover { transform: translateY(-1px); box-shadow: var(--shadow-lift); }
 }
 .btn:active { transform: translateY(0) scale(.99); }
-.btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
-.btn[aria-busy="true"] { opacity: .7; pointer-events: none; }
-.btn__chevron { font-size: 1.2rem; }
+.btn:disabled, .btn[aria-busy="true"] { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
+.btn__chevron { font-size: 1.2rem; line-height: 1; }
 
 /* ---- Dev sign-in form -------------------------------------------------- */
-.devform { margin-top: 22px; display: flex; flex-direction: column; gap: 16px;
-  padding-top: 22px; border-top: 1px dashed var(--line); }
-.devform__note { font-size: .8125rem; color: var(--ink-soft); font-weight: 600;
-  text-transform: uppercase; letter-spacing: .08em; }
-.field { display: flex; flex-direction: column; gap: 8px; }
-.field__label { font-size: 1rem; font-weight: 600; }
-.field__input {
-  min-height: var(--tap); padding: 14px 16px; font: inherit; color: var(--ink);
-  background: var(--surface-2); border: 2px solid var(--line); border-radius: var(--radius-sm);
+.devform {
+  margin-top: 22px; display: flex; flex-direction: column; gap: 16px;
+  padding-top: 22px; border-top: 1px solid var(--line);
 }
-.field__input:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; border-color: var(--focus); }
+.devform__note {
+  font-size: .8125rem; color: var(--ink-soft); font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em;
+}
+.field { display: flex; flex-direction: column; gap: 8px; }
+.field__label { font-size: 1rem; font-weight: 600; color: var(--ink); }
+.field__input {
+  min-height: var(--tap); padding: 13px 16px; font: inherit; color: var(--ink);
+  background: var(--surface); border: 2px solid var(--nhs-mid-grey);
+  border-radius: var(--radius-sm);
+}
+.field__input:hover { border-color: var(--nhs-grey-1); }
+.field__input:focus { border-color: var(--nhs-blue); }       /* + focus-visible ring above */
 
-/* ---- Login extras ------------------------------------------------------ */
-.login__legal { margin-top: 22px; font-size: .875rem; color: var(--ink-soft); max-width: 42ch; }
+/* ---- Login footnote ---------------------------------------------------- */
+.login__legal { margin-top: 22px; font-size: .9375rem; color: var(--ink-soft); max-width: 44ch; }
 
-/* ---- Error ------------------------------------------------------------- */
+/* ---- Error / alert ----------------------------------------------------- */
 .error {
-  margin-top: 18px; padding: 14px 16px; font-size: 1rem;
-  color: var(--urgent); background: color-mix(in srgb, var(--urgent) 8%, transparent);
-  border: 1px solid color-mix(in srgb, var(--urgent) 28%, transparent);
+  margin-top: 18px; padding: 14px 16px; font-size: 1rem; font-weight: 500;
+  color: #fff; background: var(--nhs-red);              /* white-on-red ≈ 4.8:1 */
   border-radius: var(--radius-sm);
 }
 
@@ -170,63 +199,67 @@ body {
 }
 .dash__bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .dash__bar-actions { display: flex; align-items: center; gap: 14px; }
-.dash__greeting { font-size: clamp(1.9rem, 6vw, 2.4rem); font-weight: 700; letter-spacing: -.025em; }
+.dash__greeting { font-size: clamp(1.9rem, 1.4rem + 2.4vw, 2.4rem); font-weight: 700; letter-spacing: -.02em; }
 
-/* Proxy switch */
+/* ---- Proxy switch ------------------------------------------------------ */
 .proxy__toggle {
-  display: inline-flex; align-items: center; gap: 10px; min-height: 48px;
+  display: inline-flex; align-items: center; gap: 10px; min-height: var(--tap);
   background: none; border: 0; cursor: pointer; color: var(--ink); font: inherit;
-  padding: 6px; border-radius: 12px;
+  padding: 6px; border-radius: 10px;
 }
-.proxy__toggle:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .proxy__track {
-  width: 52px; height: 30px; border-radius: 999px; background: var(--line);
-  position: relative; transition: background-color .18s var(--ease); flex: 0 0 auto;
+  width: 52px; height: 30px; border-radius: 999px; background: var(--nhs-mid-grey);
+  position: relative; transition: background-color .2s var(--ease); flex: 0 0 auto;
 }
 .proxy__thumb {
   position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%;
-  background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .18s var(--ease);
+  background: #fff; box-shadow: 0 1px 3px rgba(33,43,50,.35); transition: transform .2s var(--ease);
 }
-.proxy__toggle[aria-checked="true"] .proxy__track { background: var(--affirm); }
+.proxy__toggle[aria-checked="true"] .proxy__track { background: var(--nhs-blue); }
 .proxy__toggle[aria-checked="true"] .proxy__thumb { transform: translateX(22px); }
 .proxy__text { font-size: 1rem; font-weight: 600; }
 
 .proxy-banner {
-  padding: 14px 16px; border-radius: var(--radius-sm); font-size: 1rem;
-  background: color-mix(in srgb, var(--info) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--info) 30%, transparent);
+  padding: 14px 16px; border-radius: var(--radius-sm); font-size: 1rem; font-weight: 500;
+  color: var(--nhs-black); background: #eef4fb;            /* pale blue tint */
+  border-left: 4px solid var(--nhs-blue);
 }
 
-/* ---- Panels ------------------------------------------------------------ */
+/* ---- Panels (white cards, soft depth) --------------------------------- */
 .panel {
-  background: var(--surface); border: 1px solid var(--line);
-  border-radius: var(--radius); box-shadow: var(--shadow);
-  padding: clamp(20px, 5vw, 30px);
+  background: var(--surface); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: clamp(20px, 5vw, 30px);
 }
-.panel--primary { border-left: 5px solid var(--affirm); }
+.panel--primary { border-left: 5px solid var(--nhs-blue); }
 .panel__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
-.panel__title { font-size: 1.25rem; font-weight: 650; letter-spacing: -.01em; }
+.panel__title { font-size: 1.25rem; font-weight: 700; letter-spacing: -.01em; }
 .panel__lead { font-size: 1.0625rem; }
-.wl-procedure { font-size: 1.375rem; font-weight: 650; letter-spacing: -.01em; }
+.wl-procedure { font-size: 1.375rem; font-weight: 700; letter-spacing: -.01em; }
 
-/* Status chip */
+/* ---- Status chip — colour is NOT the only cue (dark text + label) ------ */
 .status-chip {
-  font-size: .9375rem; font-weight: 700; padding: 7px 14px; border-radius: 999px;
-  background: var(--line); color: var(--ink); white-space: nowrap;
+  font-size: .9375rem; font-weight: 700; padding: 6px 14px; border-radius: 999px;
+  background: var(--nhs-pale-grey); color: var(--nhs-black); white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 8px;
 }
-.status-chip[data-status="ACTIVE"] { background: var(--affirm-bg); color: var(--affirm); }
-.status-chip[data-status="PENDING_CANCELLATION"] { background: color-mix(in srgb, var(--urgent) 14%, transparent); color: var(--urgent); }
+.status-chip::before {
+  content: ""; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--nhs-mid-grey); flex: 0 0 auto;
+}
+.status-chip[data-status="ACTIVE"] { background: #e3f2e9; }            /* pale green */
+.status-chip[data-status="ACTIVE"]::before { background: var(--nhs-green); }
+.status-chip[data-status="PENDING_CANCELLATION"] { background: #fbe7e5; } /* pale red */
+.status-chip[data-status="PENDING_CANCELLATION"]::before { background: var(--nhs-red); }
 
-/* Progressive disclosure */
-.disclose { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 8px; }
+/* ---- Progressive disclosure ------------------------------------------- */
+.disclose { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 6px; }
 .disclose__summary {
   display: flex; align-items: center; justify-content: space-between;
   min-height: var(--tap); cursor: pointer; font-weight: 600; font-size: 1.0625rem;
   list-style: none; padding: 8px 2px;
 }
 .disclose__summary::-webkit-details-marker { display: none; }
-.disclose__summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; border-radius: 10px; }
-.disclose__icon { font-size: 1.5rem; color: var(--affirm); transition: transform .2s var(--ease); }
+.disclose__icon { font-size: 1.5rem; color: var(--nhs-blue); transition: transform .2s var(--ease); line-height: 1; }
 .disclose[open] .disclose__icon { transform: rotate(45deg); }
 .disclose__body { padding: 6px 2px 10px; }
 .disclose__help { margin-top: 12px; color: var(--ink-soft); }
@@ -236,20 +269,27 @@ body {
 .kv dt { color: var(--ink-soft); }
 .kv dd { font-weight: 600; text-align: right; }
 
-/* Checklist */
+/* ---- Pre-op checklist -------------------------------------------------- */
 .checklist { list-style: none; display: flex; flex-direction: column; gap: 12px; }
-.check { display: flex; align-items: center; gap: 14px; min-height: 52px; font-size: 1.0625rem; }
+.check { display: flex; align-items: center; gap: 14px; min-height: var(--tap); font-size: 1.0625rem; }
 .check__box {
-  flex: 0 0 auto; width: 30px; height: 30px; border-radius: 9px;
+  flex: 0 0 auto; width: 30px; height: 30px; border-radius: 8px;
   display: grid; place-items: center; font-size: .9rem; font-weight: 800;
-  background: var(--affirm-bg); color: var(--affirm); border: 2px solid var(--affirm);
+  background: var(--nhs-green); color: #fff;             /* white tick on green ≈ 5.1:1 */
 }
-.check--todo .check__box { background: transparent; color: transparent; border: 2px solid var(--line); }
+.check--todo .check__box { background: transparent; color: transparent; border: 2px solid var(--nhs-mid-grey); }
 .check--todo .check__text { color: var(--ink-soft); }
 
-/* ---- Motion / transitions --------------------------------------------- */
+/* ---- Shared rise transition ------------------------------------------- */
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
+/* ---- Larger screens ---------------------------------------------------- */
+@media (min-width: 640px) {
+  .card { padding: 48px; }
+  .panel { padding: 32px; }
+}
+
+/* ---- Respect reduced motion ------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: .001ms !important; animation-iteration-count: 1 !important;
@@ -257,8 +297,9 @@ body {
   }
 }
 
-/* ---- Larger screens ---------------------------------------------------- */
-@media (min-width: 640px) {
-  .card { padding: 48px; }
-  .panel { padding: 32px; }
+/* ---- Windows High Contrast / forced-colors: keep focus + structure ----- */
+@media (forced-colors: active) {
+  .btn { border: 2px solid currentColor; }
+  :where(a, button, input, summary, [tabindex]):focus-visible { outline: 3px solid Highlight; }
+  .panel, .card { border: 1px solid currentColor; }
 }

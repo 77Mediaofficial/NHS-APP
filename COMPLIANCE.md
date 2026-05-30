@@ -279,3 +279,15 @@ _Last reviewed: 2026-05-29._
 - `.gitattributes`: `COMPLIANCE_CHANGELOG.md merge=union` so concurrent appends from two machines never conflict.
 - Hook self-skips the ledger file; malformed input → exit 0 (never blocks an edit). Verified via a 4-case test.
 - Process note: each substantive change still gets a curated §-update here, by me, in the same change.
+
+**Changelog — 2026-05-30 (portal restyle to official NHS palette):**
+- §5/§10 — `portal/styles.css` rebuilt on the official NHS palette (Blue #005EB8, Black #212B32, Pale
+  Grey #E8EDEE, Green #007F3B, Red #DA291C) per the NHS Digital Service Manual aesthetic. Verified live:
+  pale-grey body, white 8px cards, NHS-blue primary button, NHS-green checks.
+- Accessibility (WCAG 2.2 AA aim): 48px touch targets; `:focus-visible` = NHS-yellow 3px outline + black
+  outer ring (visible on any surface); **status not conveyed by colour alone** (chip has a shape/dot + text
+  label); `forced-colors` (Windows High Contrast) + `prefers-reduced-motion` support. Developer-measured
+  contrasts ≥ AA (blue 5.6:1, grey-1 6.0:1, green 5.1:1, white-on-red 4.8:1) — still ❌ formal audit + AT testing.
+- Light-only per Service Manual: `color-scheme` meta aligned to `light` to avoid dark native controls.
+- Cache-bust `styles.css?v=20260530`. **Caveat:** "official NHS palette" ≠ NHS-accredited; real NHS
+  brand/identity use requires permission, and the logo remains a placeholder.

@@ -115,8 +115,10 @@ Five-pillar routing (where each pillar is evidenced in this repo):
 ## 5. Accessibility — WCAG 2.2 AA + NHS design standards ⚠️
 *Public Sector Bodies (Websites & Mobile Applications) Accessibility Regs 2018.*
 
-- ⚠️ **NHS.UK frontend / service manual.** Current UI is bespoke ("high-end minimal").
-  NHS patient services are expected to use NHS.UK patterns. Reconcile aesthetic vs. standard.
+- ⚠️ **NHS.UK frontend / service manual.** Both surfaces — the SMS page (`frontend/`) and the portal
+  (`portal/`) — now share ONE design system on the **official NHS palette** (Blue #005EB8, Black #212B32,
+  Pale Grey #E8EDEE, Green #007F3B, Red #DA291C), consistent across pages. Still ⚠️: Service-Manual-*aligned*,
+  not the actual NHS.UK component library, and not NHS-accredited (logo is a placeholder).
 - ✅ **Colour contrast (developer-measured vs AA 4.5:1).** Light: `--ink-soft` ≈ 6.0:1, `--affirm`
   ≈ 6.6:1, `--urgent` ≈ 5.5:1 on white; dark: `--ink-soft` ≈ 7.2:1. ⚠️ Non-text/UI-component (3:1)
   and focus-indicator contrast still to be confirmed by the formal audit.

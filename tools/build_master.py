@@ -102,20 +102,17 @@ def anchor(path):
 def main():
     files = sorted(tracked_text_files(), key=order_key)
 
-    try:
-        commit = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
-            capture_output=True, text=True, check=True
-        ).stdout.strip()
-    except Exception:
-        commit = "(unknown)"
-
+    # NOTE: deliberately NOT embedding the current commit hash here. The hash
+    # changes on every commit, which would make MASTER.md drift by one line after
+    # each commit forever (perpetual churn). By keeping the header static, the
+    # bundle changes ONLY when real source content changes — so "git diff
+    # MASTER.md" is meaningful and a stale bundle is easy to spot.
     parts = [
         "# NHS Waitlist Validation — MASTER bundle\n",
         "> **AUTO-GENERATED — do not edit by hand.** Single-file snapshot of every\n"
         "> git-tracked text file, for easy review / handover. Regenerate with\n"
         "> `python tools/build_master.py`. The individual files remain the source of\n"
-        f"> truth; this is a convenience copy. Generated from commit `{commit}`.\n"
+        "> truth; this is a convenience copy.\n"
         ">\n"
         "> Secrets are never included — only git-tracked files are bundled, so the\n"
         "> gitignored `env.js` is excluded and only the `env.example.js` template appears.\n",

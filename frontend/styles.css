@@ -1,195 +1,166 @@
 /* =========================================================================
-   NHS Waitlist Validation — "Refined visual storytelling"
-   Mobile-first. System fonts. High-contrast type. Generous whitespace.
+   NHS Waitlist Validation (SMS page) — styles.css
+   Same design system as the Patient Hub portal: official NHS palette + WCAG 2.2
+   AA rules (NHS Digital Service Manual aesthetic). Calm, spacious, high-end.
+
+   Built to ALIGN WITH the NHS Service Manual + WCAG 2.2 AA — not an accredited
+   NHS product. Logo is a placeholder; real NHS identity needs brand permission.
+   Contrast ratios are developer-measured against AA; confirm in a formal audit.
+
+   Light-only by design (Service Manual). `color-scheme: light` keeps native
+   controls light even on a dark-OS device.
    ========================================================================= */
 
 :root {
-  --ink:        #0b1220;   /* near-black, high-contrast text */
-  --ink-soft:   #5a6473;   /* secondary text */
-  --line:       #e7e9ee;   /* hairline borders */
-  --surface:    #ffffff;
-  --canvas:     #f6f7f9;   /* page background */
+  /* ---- Official NHS palette (shared with portal/) --------------------- */
+  --nhs-blue:        #005EB8;  /* primary / accent. On white ≈ 5.6:1 (AA). */
+  --nhs-dark-blue:   #003087;  /* hover/active. On white ≈ 10.9:1. */
+  --nhs-black:       #212B32;  /* body text. On white ≈ 14.5:1. */
+  --nhs-grey-1:      #4C6272;  /* secondary text. On white ≈ 6.0:1 (AA). */
+  --nhs-pale-grey:   #E8EDEE;  /* page background. */
+  --nhs-mid-grey:    #AEB7BD;  /* borders/dividers (decorative). */
+  --nhs-white:       #FFFFFF;  /* elevated cards. */
+  --nhs-green:       #007F3B;  /* success / "still need it". On white ≈ 5.1:1. */
+  --nhs-warm-yellow: #FFB81C;  /* warning / "symptoms worse" (decorative accent). */
+  --nhs-red:         #DA291C;  /* destructive / error. White-on-red ≈ 4.8:1 (AA). */
+  --nhs-yellow:      #FFEB3B;  /* focus indicator. */
 
-  --affirm:     #006a4e;   /* calm NHS green */
-  --urgent:     #b8421f;   /* warm amber-red, not alarming */
-  --decline:    #3a4250;   /* quiet neutral */
+  /* Semantic aliases */
+  --ink:        var(--nhs-black);
+  --ink-soft:   var(--nhs-grey-1);
+  --line:       #D8DDE0;
+  --surface:    var(--nhs-white);
+  --canvas:     var(--nhs-pale-grey);
+  --focus:      var(--nhs-yellow);
 
-  --focus:      #1d4ed8;
-  --shadow:     0 1px 2px rgba(11,18,32,.04), 0 8px 24px rgba(11,18,32,.06);
-  --shadow-lift:0 2px 4px rgba(11,18,32,.06), 0 16px 40px rgba(11,18,32,.10);
+  /* Per-choice accent (decorative bar; meaning is carried by the text label) */
+  --affirm:     var(--nhs-green);
+  --urgent:     var(--nhs-warm-yellow);
+  --decline:    var(--nhs-red);
 
-  --radius:     16px;
-  --radius-sm:  12px;
+  /* ---- Soft-UI shadows ----------------------------------------------- */
+  --shadow:      0 1px 2px rgba(33,43,50,.06), 0 6px 18px rgba(33,43,50,.08);
+  --shadow-lift: 0 2px 6px rgba(33,43,50,.10), 0 14px 34px rgba(33,43,50,.14);
+
+  /* ---- Radius / motion / touch --------------------------------------- */
+  --radius:     8px;           /* cards / choices (per Service Manual) */
+  --radius-lg:  12px;          /* hero container */
+  --radius-sm:  6px;
   --ease:       cubic-bezier(.2,.7,.2,1);
+  --tap:        48px;          /* minimum touch target (elderly-friendly) */
 
-  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          Helvetica, Arial, sans-serif;
+  --font: "Inter", Arial, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          Roboto, Helvetica, sans-serif;
+
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --ink:      #f3f5f8;
-    --ink-soft: #9aa4b2;
-    --line:     #232a36;
-    --surface:  #12161e;
-    --canvas:   #0a0d13;
-    --affirm:   #2fbf93;
-    --urgent:   #e0734e;
-    --decline:  #aeb7c4;
-    --shadow:     0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
-    --shadow-lift:0 2px 4px rgba(0,0,0,.5), 0 18px 46px rgba(0,0,0,.5);
-  }
-}
-
+/* ---- Reset ------------------------------------------------------------- */
 * { box-sizing: border-box; margin: 0; padding: 0; }
-
 html { -webkit-text-size-adjust: 100%; }
 
-/* ---- Skip link (WCAG 2.4.1) — visible only when focused ----------------- */
-.skip-link {
-  position: absolute;
-  left: 12px;
-  top: -48px;
-  z-index: 10;
-  padding: 10px 14px;
-  background: var(--surface);
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  font-family: var(--font);
-  font-size: .9375rem;
-  text-decoration: none;
-  transition: top .15s var(--ease);
-}
-.skip-link:focus-visible {
-  top: 12px;
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-}
-
-/* Containers focused programmatically (confirm gate, success message) should not
-   show a focus ring — focus is moved only to announce, not to indicate a control. */
-#confirm:focus, #confirm:focus-visible,
-#success:focus, #success:focus-visible { outline: none; }
+/* The [hidden] attribute must always win (author display rules below would
+   otherwise leak the hidden question/confirm/success states). */
+[hidden] { display: none !important; }
 
 body {
   font-family: var(--font);
   color: var(--ink);
   background: var(--canvas);
-  line-height: 1.5;
+  /* Fluid base type — comfortable for older eyes; everything scales from here. */
+  font-size: clamp(1.0625rem, 0.98rem + 0.45vw, 1.1875rem);
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-/* ---- Layout shell (mobile-first) ---------------------------------------- */
+/* ---- Skip link (WCAG 2.4.1) — visible only on focus -------------------- */
+.skip-link {
+  position: absolute; left: 12px; top: -64px; z-index: 30;
+  padding: 12px 16px; background: var(--surface); color: var(--ink);
+  border-radius: var(--radius-sm); text-decoration: none; font-weight: 600;
+  box-shadow: var(--shadow); transition: top .15s var(--ease);
+}
+.skip-link:focus-visible { top: 12px; }
+
+/* ---- Global focus indicator (WCAG 2.2) --------------------------------
+   NHS-style: yellow outer outline + black ring, visible on any surface.
+   Never outline:none without a high-contrast replacement. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--nhs-yellow);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 3px var(--nhs-black);
+  border-radius: 4px;
+}
+
+/* Containers focused programmatically (confirm gate, success) are focused only
+   to ANNOUNCE — they are not controls, so suppress the ring. */
+#confirm:focus, #confirm:focus-visible,
+#success:focus, #success:focus-visible { outline: none; box-shadow: none; }
+
+/* ---- Layout shell (mobile-first) -------------------------------------- */
 .stage {
   min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 20px;
-  padding: clamp(20px, 6vw, 40px) clamp(18px, 5vw, 32px);
-  padding-top: max(28px, env(safe-area-inset-top));
-  padding-bottom: max(28px, env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; justify-content: center;
+  gap: 18px;
+  padding: clamp(20px, 5vw, 44px) clamp(16px, 4vw, 28px);
+  padding-top: max(24px, env(safe-area-inset-top));
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
 }
 
 .card {
-  width: 100%;
-  max-width: 480px;
-  margin: 0 auto;
+  width: 100%; max-width: 520px; margin: 0 auto;
   background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
-  padding: clamp(24px, 7vw, 40px);
+  padding: clamp(26px, 7vw, 44px);
 }
 
-/* ---- Brand -------------------------------------------------------------- */
-.brand { margin-bottom: 28px; }
-.brand__mark { color: var(--affirm); width: 64px; }
+/* ---- Brand ------------------------------------------------------------- */
+.brand { margin-bottom: 26px; }
+.brand__mark { color: var(--nhs-blue); width: 68px; }   /* blue box, white "NHS" */
 .brand__mark svg { display: block; width: 100%; height: auto; }
-.brand__trust {
-  margin-top: 12px;
-  font-size: .8125rem;
-  font-weight: 500;
-  color: var(--ink-soft);
-  letter-spacing: .01em;
-}
+.brand__trust { margin-top: 12px; font-size: .9375rem; font-weight: 600; color: var(--ink-soft); }
 
-/* ---- Question ----------------------------------------------------------- */
+/* ---- Type -------------------------------------------------------------- */
 .eyebrow {
-  font-size: .75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .14em;
-  color: var(--ink-soft);
-  margin-bottom: 14px;
+  font-size: .8125rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .12em; color: var(--ink-soft); margin-bottom: 14px;
 }
-
 .headline {
-  font-size: clamp(1.6rem, 7vw, 2.1rem);
-  line-height: 1.15;
-  letter-spacing: -0.02em;
-  font-weight: 700;
-  margin-bottom: 16px;
+  font-size: clamp(1.7rem, 1.2rem + 2.6vw, 2.3rem); line-height: 1.14;
+  letter-spacing: -0.02em; font-weight: 700; color: var(--ink); margin-bottom: 16px;
 }
-.headline em {
-  font-style: normal;
-  color: var(--affirm);
-}
+.headline em { font-style: normal; color: var(--nhs-blue); }   /* NHS-blue accent */
+.lede { font-size: 1.0625rem; color: var(--ink-soft); max-width: 44ch; margin-bottom: 28px; }
 
-.lede {
-  font-size: 1rem;
-  color: var(--ink-soft);
-  max-width: 42ch;
-  margin-bottom: 28px;
-}
-
-/* ---- Action buttons ----------------------------------------------------- */
-.actions {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
+/* ---- Choice cards (full-width, selectable) ---------------------------- */
+.actions { display: flex; flex-direction: column; gap: 12px; }
 
 .choice {
   --accent: var(--decline);
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
+  display: flex; align-items: center; gap: 16px;
+  width: 100%; min-height: var(--tap);
+  text-align: left; cursor: pointer;
   background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 18px 18px;
-  font-family: inherit;
-  color: var(--ink);
-  transition: transform .18s var(--ease),
-              box-shadow .18s var(--ease),
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  font-family: inherit; color: var(--ink);
+  transition: transform .18s var(--ease), box-shadow .18s var(--ease),
               border-color .18s var(--ease);
 }
-
+/* Decorative accent bar (the text label carries the meaning, not the colour). */
 .choice::before {
-  content: "";
-  width: 4px;
-  align-self: stretch;
-  border-radius: 999px;
-  background: var(--accent);
-  opacity: .85;
-  transition: opacity .18s var(--ease);
+  content: ""; width: 5px; align-self: stretch; border-radius: 999px;
+  background: var(--accent); flex: 0 0 auto;
 }
-
 .choice__body { display: flex; flex-direction: column; gap: 3px; flex: 1; }
-.choice__title { font-size: 1.0625rem; font-weight: 600; letter-spacing: -.01em; }
-.choice__note  { font-size: .8125rem; color: var(--ink-soft); }
-
+.choice__title { font-size: 1.0625rem; font-weight: 700; letter-spacing: -.01em; }
+.choice__note  { font-size: .9375rem; color: var(--ink-soft); }
 .choice__chevron {
-  font-size: 1.1rem;
-  color: var(--accent);
-  opacity: 0;
-  transform: translateX(-6px);
+  font-size: 1.2rem; color: var(--nhs-blue);
+  opacity: 0; transform: translateX(-6px);
   transition: opacity .18s var(--ease), transform .18s var(--ease);
 }
 
@@ -197,74 +168,47 @@ body {
 .choice--urgent  { --accent: var(--urgent); }
 .choice--decline { --accent: var(--decline); }
 
-/* Hover / focus — clear, refined feedback */
 @media (hover: hover) {
   .choice:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-lift);
-    border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+    transform: translateY(-2px); box-shadow: var(--shadow-lift);
+    border-color: var(--nhs-blue);
   }
   .choice:hover .choice__chevron { opacity: 1; transform: translateX(0); }
 }
-
-.choice:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 3px;
-}
-
+/* Reveal the chevron on keyboard focus too (parity with hover). */
+.choice:focus-visible .choice__chevron { opacity: 1; transform: translateX(0); }
 .choice:active { transform: translateY(0) scale(.992); }
 
-/* Busy / disabled states */
-.choice[aria-busy="true"] {
-  color: var(--ink-soft);
-}
-.choice[aria-busy="true"] .choice__chevron {
-  opacity: 1; transform: none;
-  animation: spin .7s linear infinite;
-}
-.choice:disabled { cursor: default; opacity: .55; }
-
+/* Busy / disabled */
+.choice[aria-busy="true"] .choice__chevron { opacity: 1; transform: none; animation: spin .7s linear infinite; }
+.choice:disabled { cursor: not-allowed; opacity: .5; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ---- Error -------------------------------------------------------------- */
+/* ---- Error / alert (solid NHS red, white text ≈ 4.8:1) ---------------- */
 .error {
-  margin-top: 18px;
-  padding: 12px 14px;
-  font-size: .875rem;
-  color: var(--urgent);
-  background: color-mix(in srgb, var(--urgent) 8%, transparent);
-  border: 1px solid color-mix(in srgb, var(--urgent) 25%, transparent);
-  border-radius: var(--radius-sm);
+  margin-top: 18px; padding: 14px 16px; font-size: 1rem; font-weight: 500;
+  color: #fff; background: var(--nhs-red); border-radius: var(--radius-sm);
 }
 
-/* ---- Confirmation gate (destructive-action mitigation) ------------------ */
+/* ---- Confirmation gate (destructive-action mitigation) ---------------- */
 .confirm { animation: rise .4s var(--ease) both; }
 .confirm__title {
-  font-size: clamp(1.5rem, 6vw, 1.9rem);
-  line-height: 1.15;
-  font-weight: 700;
-  letter-spacing: -.02em;
-  margin: 6px 0 12px;
+  font-size: clamp(1.5rem, 1.1rem + 1.8vw, 1.9rem); line-height: 1.15;
+  font-weight: 700; letter-spacing: -.02em; margin: 6px 0 12px;
 }
-.confirm__text {
-  font-size: 1rem;
-  color: var(--ink-soft);
-  max-width: 42ch;
-  margin-bottom: 24px;
-}
+.confirm__text { font-size: 1.0625rem; color: var(--ink-soft); max-width: 44ch; margin-bottom: 24px; }
 
-/* ---- Success ------------------------------------------------------------ */
+/* ---- Success ----------------------------------------------------------- */
 .success { text-align: center; padding: 12px 0 4px; }
-
 .success__tick { width: 64px; height: 64px; margin: 0 auto 22px; }
 .success__tick svg { width: 100%; height: 100%; }
 .success__ring {
-  stroke: var(--affirm); stroke-width: 2.5;
+  stroke: var(--nhs-green); stroke-width: 2.5;
   stroke-dasharray: 151; stroke-dashoffset: 151;
   animation: ring .5s var(--ease) forwards;
 }
 .success__check {
-  stroke: var(--affirm); stroke-width: 3.5;
+  stroke: var(--nhs-green); stroke-width: 3.5;
   stroke-linecap: round; stroke-linejoin: round;
   stroke-dasharray: 44; stroke-dashoffset: 44;
   animation: check .35s var(--ease) .4s forwards;
@@ -273,45 +217,37 @@ body {
 @keyframes check { to { stroke-dashoffset: 0; } }
 
 .success__title {
-  font-size: clamp(1.5rem, 6vw, 1.9rem);
-  font-weight: 700;
-  letter-spacing: -.02em;
-  margin-bottom: 8px;
+  font-size: clamp(1.5rem, 1.1rem + 1.8vw, 1.9rem);
+  font-weight: 700; letter-spacing: -.02em; margin-bottom: 8px;
 }
 .success__text   { font-size: 1.0625rem; color: var(--ink); }
-.success__detail { font-size: .875rem; color: var(--ink-soft); margin-top: 12px; }
+.success__detail { font-size: .9375rem; color: var(--ink-soft); margin-top: 12px; }
 
-/* ---- Footer ------------------------------------------------------------- */
-.legal {
-  max-width: 480px;
-  margin: 0 auto;
-  text-align: center;
-}
-.legal p {
-  font-size: .75rem;
-  color: var(--ink-soft);
-  max-width: 38ch;
-  margin: 0 auto;
-}
+/* ---- Footer ------------------------------------------------------------ */
+.legal { max-width: 520px; margin: 0 auto; text-align: center; }
+.legal p { font-size: .8125rem; color: var(--ink-soft); max-width: 40ch; margin: 0 auto; }
 
-/* ---- View transition between states ------------------------------------ */
+/* ---- View transition --------------------------------------------------- */
 .question, .success { animation: rise .4s var(--ease) both; }
-@keyframes rise {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-/* ---- Larger screens ----------------------------------------------------- */
+/* ---- Larger screens ---------------------------------------------------- */
 @media (min-width: 600px) {
   .card { padding: 48px; }
-  .choice { padding: 20px 22px; }
+  .choice { padding: 18px 22px; }
 }
 
-/* ---- Respect reduced motion -------------------------------------------- */
+/* ---- Respect reduced motion ------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
-    animation-duration: .001ms !important;
-    animation-iteration-count: 1 !important;
+    animation-duration: .001ms !important; animation-iteration-count: 1 !important;
     transition-duration: .001ms !important;
   }
+}
+
+/* ---- Windows High Contrast / forced-colors ---------------------------- */
+@media (forced-colors: active) {
+  .choice { border: 2px solid currentColor; }
+  .card { border: 1px solid currentColor; }
+  :where(a, button, summary, [tabindex]):focus-visible { outline: 3px solid Highlight; }
 }

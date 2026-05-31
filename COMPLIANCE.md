@@ -299,6 +299,16 @@ _Last reviewed: 2026-05-29._
   verified no real keys (only `%%` placeholders) and no self-recursion. The one `SUPABASE_SERVICE_ROLE_KEY`
   string in the bundle is the dispatch worker's `Deno.env.get(...)` *read* — the secret value is never in source.
 - `tools/` is outside `frontend/`/`supabase/`/`portal/`, so it carries no compliance surface of its own.
+
+**Changelog — 2026-05-30 (SMS page unified to the NHS design system):**
+- §5 — `frontend/styles.css` rebuilt to the SAME official-NHS-palette design system as `portal/` (shared
+  tokens, 8px cards, 48px touch targets, NHS-yellow+black `:focus-visible` ring, light-only via `color-scheme`,
+  `forced-colors` + reduced-motion support). The SMS page and portal are now visually consistent.
+- Verified live (devMock, :5500): pale-grey body, white card, NHS-blue accent, 48px choices, 3-choice question
+  → decline → confirm (focus on safe "No") → success (NHS-green tick, focus moved); NHS-red error; no console/CSP errors.
+- Clinical-safety flow (DCB0129/0160) unchanged and intact — restyle only; confirmation gate + reversible
+  soft-state behaviour preserved. `frontend/index.html`: `color-scheme: light`, `styles.css?v=20260530` cache-bust.
+- Caveat unchanged: NHS-palette ≠ NHS-accredited; logo is a placeholder; formal WCAG audit + AT testing still ❌.
 - Correction note: an earlier draft this session referenced two files (`20260529070000_patient_portal_rls.sql`,
   `portal/vercel.json`) that **do not exist** — those were hallucinated and never committed; no false claim
   landed in the repo (verified: 29 tracked files, working tree clean).

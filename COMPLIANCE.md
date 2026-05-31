@@ -195,12 +195,18 @@ Five-pillar routing (where each pillar is evidenced in this repo):
   screen only; the dashboard is never shown without a session.
 - ✅ **IDOR-safe reads.** The data query (`from('waitlist_entries').select('*')`) passes **no user id**;
   isolation is enforced server-side by RLS on `auth.uid()`. No client-supplied identifier chooses whose data loads.
-- ✅ **Fail-closed today (secure by default).** There is currently **no patient SELECT policy** on
-  `waitlist_entries`, so a logged-in patient sees **nothing** until the backend is extended. The portal
-  handles this gracefully (friendly empty state).
-- 🚫 **BACKEND DEPENDENCY (before it can show real data):** add (a) a `patient_user_id` link from
-  `waitlist_entries` to the NHS Login identity, and (b) `CREATE POLICY ... FOR SELECT TO authenticated
-  USING (patient_user_id = auth.uid())`. Without this it stays empty (by design).
+- ✅ **Patient SELECT policy now in code.** `pol_entries_patient_select` (migration
+  `20260529070000_patient_portal_rls.sql`) = `FOR SELECT TO authenticated USING (patient_user_id = auth.uid())`,
+  on the `patient_user_id` column added by the base schema (`20260527000000_base_schema.sql`). This closes the
+  previously-🚫 blocker: a signed-in patient can read **only their own** row, server-side, IDOR-safe, fail-closed
+  when `patient_user_id` is NULL. *Code-reviewed, not yet executed (no live DB this session).*
+- ⚠️ **Base schema now scaffolded in-repo** (`20260527000000_base_schema.sql`): `hospitals`,
+  `waitlist_entries` (incl. `patient_user_id`, `status` CHECK with `PENDING_CANCELLATION`), `auth.current_hospital_id()`,
+  `sms_dispatch_jobs` + `get_next_sms_batch()`. Minimal/dev foundation — **replace with the Trust's real tables**
+  if one exists (point the app at those and delete this file).
+- 🚫👤 **Still required before real patient data shows (NOT closable in SQL alone):** (a) wire real NHS Login OIDC
+  into Supabase Auth (portal mocks it today); (b) an **identity-matching step** that sets
+  `waitlist_entries.patient_user_id` from the verified NHS Login subject. Until (b) runs, every row stays NULL → portal correctly empty.
 - ⚠️ **Mock NHS Login.** The "Sign in with NHS Login" button simulates OIDC; for local testing it
   reveals a form where the tester types their own credentials. **No credentials are stored in the repo.**
   Production must swap in the real NHS Login OIDC provider (`signInWithOAuth`) — 👤 integration + assurance.

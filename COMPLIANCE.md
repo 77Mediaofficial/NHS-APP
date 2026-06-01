@@ -218,8 +218,17 @@ Five-pillar routing (where each pillar is evidenced in this repo):
   (IMMUTABLE, migration `20260529050000`, usable as a CHECK constraint) + TS `isValidNhsNumber()` /
   `normaliseNhsNumber()` (`supabase/functions/_shared/nhs-number.ts`) for edge ingest workers.
   Pending: apply at the actual boundary if/when NHS Number is ingested, and document where it lives.
-- ❌ **FHIR standard APIs.** No FHIR surface today. If the waitlist integrates with PAS/e-RS or
-  exposes data to other systems, use HL7 FHIR UK Core resources. Future / separate workstream.
+- ➖👤 **FHIR standard APIs — DECISION: not built now (deliberate, documented).** No FHIR surface exists,
+  and one is **intentionally not built** in this iteration. *Rationale:* DTAC interoperability requires open
+  standards **where systems interoperate** — today this app has no consumer for a FHIR feed (the patient portal
+  reads its own DB via RLS; the SMS layer is PII-free UUID tokens). Building a speculative FHIR API now would add
+  attack surface, PII exposure, and maintenance burden for **zero** current integration, and could not be
+  verified against a real consumer — net-negative for security and honesty. *When it becomes in scope* (waitlist
+  integrates with PAS / e-Referral Service, or must expose data to another system), implement **HL7 FHIR UK Core**:
+  the waitlist entry maps to a `ServiceRequest` / `Appointment` + `Patient` (the `Patient.identifier` is the NHS
+  Number — validate via the existing `is_valid_nhs_number` at that boundary), served read-only behind the same
+  auth + residency controls. 👤 The Trust owns the trigger (is there a real integration requirement?) and the
+  conformance/assurance. *This is a recorded decision, not an open gap — revisit if an integration need appears.*
 
 ## 10. Patient Hub portal (authenticated) — `portal/` ⚠️
 *A separate, fully authenticated patient dashboard. Unlike the SMS validation page, it has
@@ -505,3 +514,18 @@ _Last reviewed: 2026-06-01._
   2026-06-01) consumes exactly those claims once they flow.
 - Honesty note: not a compliance claim; the OAuth redirect path itself is code-reviewed but unexercised without a
   registered provider (no live OIDC this session).
+
+**Changelog — 2026-06-01 (FHIR decision record + roadmap close-out):**
+- §9 — Recorded an explicit DECISION not to build a FHIR surface now (`❌ → ➖👤`): there is no consuming system
+  today, so a speculative FHIR API would add attack surface + PII exposure + maintenance for zero benefit and
+  couldn't be verified. Documented the UK Core mapping (waitlist → `ServiceRequest`/`Appointment` + `Patient`,
+  NHS Number as `Patient.identifier`, reuse `is_valid_nhs_number`) for if/when a real integration appears. This
+  is a recorded architecture decision, **not** an open gap — the Trust owns the trigger.
+- This closes the code-closeable roadmap (items 1–7): identity matching, portal data minimisation, security.txt,
+  incident runbook, clinical-review workflow, tamper-evident audit chains, proxy-access scaffold, NHS Login OIDC
+  code path, and this FHIR decision. **What remains is NOT code:** (a) stand up a real Supabase project and
+  EXECUTE all 10 migrations (every backend item is "code-reviewed, not executed"); (b) dashboard settings
+  (UK region, admin MFA, OIDC provider registration); (c) the staff-tooling UI + real staff auth; and (d) all
+  👤 Trust governance sign-offs (CSO/Hazard Log/CSCR, DPIA, DSPT, Caldicott, CREST pen test, Cyber Essentials
+  Plus, formal WCAG audit, at-rest encryption). **No "compliant" claim at any point — only "built to align with,
+  pending sign-off."**

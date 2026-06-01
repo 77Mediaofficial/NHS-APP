@@ -84,11 +84,15 @@ start. **Do not describe as "compliant" at any score.**
   and returns an audit summary. Pending: wire into the Trust's documented erasure/rectification process.
 - ⚠️ **PII encryption at rest** for `waitlist_entries` — use *current* Supabase-recommended
   primitives (Vault / app-layer envelope), **not** deprecated pgsodium TCE. Use standard
-  randomized AEAD, not "deterministic AEAD."
+  randomized AEAD, not "deterministic AEAD." **Raised priority:** `waitlist_entries.nhs_number`
+  (added 2026-06-01 for identity matching, §10) is personal data now stored at rest — it must be
+  covered by this control and by the DPIA before go-live.
 
 ## 3. Common Law Confidentiality + Caldicott Principles 👤
 - ✅ Justify the purpose (waitlist accuracy) — documented in app copy.
-- ✅ Use the minimum necessary PII (none in the patient-facing layer).
+- ✅ Use the minimum necessary PII — **none in either patient-facing layer**: the SMS page is UUID-only, and
+  the portal client query selects explicit non-PII columns (the `nhs_number` match key added in §10 is stored
+  on the record for staff/matching but is never sent to the patient's browser).
 - ⚠️👤 Access on a need-to-know basis — RLS scopes admin reads to `hospital_id`; confirm
   `auth.current_hospital_id()` is correct and tested.
 - ❌ Duty to share balanced against duty to protect — documented by Caldicott Guardian.
@@ -193,8 +197,10 @@ Five-pillar routing (where each pillar is evidenced in this repo):
 
 - ✅ **Strict auth gating.** `onAuthStateChange` + `getSession` route the UI: no session ⇒ login
   screen only; the dashboard is never shown without a session.
-- ✅ **IDOR-safe reads.** The data query (`from('waitlist_entries').select('*')`) passes **no user id**;
-  isolation is enforced server-side by RLS on `auth.uid()`. No client-supplied identifier chooses whose data loads.
+- ✅ **IDOR-safe + data-minimised reads.** The data query passes **no user id** (isolation is enforced
+  server-side by RLS on `auth.uid()`; no client-supplied identifier chooses whose data loads) **and now selects
+  only explicit non-PII columns** (`procedure, status, referred_at, created_at`) — it deliberately never pulls
+  `nhs_number` or `patient_user_id` into the browser (UK GDPR data minimisation, §2). Closes the prior `select('*')` TODO.
 - ✅ **Patient SELECT policy now in code.** `pol_entries_patient_select` (migration
   `20260529070000_patient_portal_rls.sql`) = `FOR SELECT TO authenticated USING (patient_user_id = auth.uid())`,
   on the `patient_user_id` column added by the base schema (`20260527000000_base_schema.sql`). This closes the
@@ -204,9 +210,20 @@ Five-pillar routing (where each pillar is evidenced in this repo):
   `waitlist_entries` (incl. `patient_user_id`, `status` CHECK with `PENDING_CANCELLATION`), `auth.current_hospital_id()`,
   `sms_dispatch_jobs` + `get_next_sms_batch()`. Minimal/dev foundation — **replace with the Trust's real tables**
   if one exists (point the app at those and delete this file).
+- ✅ **Identity-matching step now in code.** `link_my_waitlist_record()` (migration
+  `20260601000000_link_patient_identity.sql`, SECURITY DEFINER, `authenticated`-only) reads the caller's **own
+  verified NHS Number** from the request JWT (claim `nhs_number`, gated on `identity_proofing_level = 'P9'`),
+  validates it (modulus-11), and self-assigns `patient_user_id = auth.uid()` on matching **unclaimed** rows
+  (first-claim-wins). Takes **no parameters** → IDOR-safe by construction (a caller can only ever claim their own
+  verified rows for their own uid); fail-closed (missing/invalid number or sub-P9 → 0 rows linked). Adds a
+  `waitlist_entries.nhs_number` column (modulus-11 CHECK + normalised expression index) as the match key.
+  *Code-reviewed, not yet executed (no live DB this session).*
 - 🚫👤 **Still required before real patient data shows (NOT closable in SQL alone):** (a) wire real NHS Login OIDC
-  into Supabase Auth (portal mocks it today); (b) an **identity-matching step** that sets
-  `waitlist_entries.patient_user_id` from the verified NHS Login subject. Until (b) runs, every row stays NULL → portal correctly empty.
+  into Supabase Auth (portal mocks it today); (b) confirm the **JWT claim mapping** the matcher assumes
+  (`nhs_number`, `identity_proofing_level='P9'`) matches the real NHS Login → Supabase OIDC config, and decide
+  where linking runs (post-login/access-token hook recommended over the client calling the RPC); (c) the Trust's
+  ingest/PAS must populate `waitlist_entries.nhs_number`. Until (a)+(b) align and rows carry a number, every row
+  stays NULL → portal correctly empty.
 - ⚠️ **Mock NHS Login.** The "Sign in with NHS Login" button simulates OIDC; for local testing it
   reveals a form where the tester types their own credentials. **No credentials are stored in the repo.**
   Production must swap in the real NHS Login OIDC provider (`signInWithOAuth`) — 👤 integration + assurance.
@@ -243,7 +260,7 @@ Five-pillar routing (where each pillar is evidenced in this repo):
 3. Does it move, log, or expose any PII? → re-check §2, §3, §6, §7.
 4. Update the status markers here in the same commit.
 
-_Last reviewed: 2026-05-31._
+_Last reviewed: 2026-06-01._
 
 **Changelog — 2026-05-29 (NHS guideline back-check):**
 - §1 — Mitigated the instant-irreversible auto-cancel hazard: added a frontend confirmation gate
@@ -348,3 +365,20 @@ _Last reviewed: 2026-05-31._
   past the original logout deadline. `node --check portal/app.js` OK.
 - Honesty note: a built + live-verified control, **not** a compliance claim. Portal go-live still needs the
   §10 👤 items (real NHS Login OIDC, identity-matching) + Trust sign-offs (DPO/Caldicott/CSO).
+
+**Changelog — 2026-06-01 (identity matching + portal data minimisation):**
+- §10 — Added `link_my_waitlist_record()` (migration `20260601000000_link_patient_identity.sql`): the
+  identity-matching step that links a verified NHS Login patient (`auth.uid()`) to their waitlist row(s) by
+  matching the verified `nhs_number` JWT claim (gated on `identity_proofing_level='P9'`, modulus-11 validated).
+  Takes no parameters → IDOR-safe by construction; fail-closed; first-claim-wins. Adds `waitlist_entries.nhs_number`
+  (modulus-11 CHECK + normalised expression index) as the match key. Status of the identity-matching blocker `🚫 → ✅`
+  (code); the remaining gate is 👤 integration (real OIDC + confirming the claim mapping + ingest populating the column).
+- §10/§2 — Closed the `select('*')` data-minimisation TODO: `portal/app.js` now selects only
+  `procedure, status, referred_at, created_at` — never `nhs_number`/`patient_user_id` to the browser.
+  Verified live (mock dashboard still renders: greeting, procedure, Active chip, referred date; no console errors).
+- §2 — Raised the at-rest-encryption priority: `nhs_number` is now personal data stored on `waitlist_entries`;
+  flagged that it must be covered by the encryption-at-rest control **and** the DPIA before go-live.
+- §3 — Restated "minimum necessary PII": both patient-facing layers remain PII-free in the client; the match key
+  is stored for staff/matching only.
+- Honesty note: code-reviewed, **not** executed (no live Postgres this session) and **not** a compliance claim.
+  This is a deliberate, documented increase in the data-protection surface (storing NHS Number) that the DPIA must cover.

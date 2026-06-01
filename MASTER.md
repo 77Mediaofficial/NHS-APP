@@ -9,7 +9,7 @@
 > gitignored `env.js` is excluded and only the `env.example.js` template appears.
 
 
-**32 files** in this bundle.
+**33 files** in this bundle.
 
 
 ## Contents
@@ -39,6 +39,7 @@
 - [`supabase/migrations/20260529050000_nhs_number_modulus11.sql`](#supabase-migrations-20260529050000-nhs-number-modulus11-sql)
 - [`supabase/migrations/20260529060000_issue_validation_token.sql`](#supabase-migrations-20260529060000-issue-validation-token-sql)
 - [`supabase/migrations/20260529070000_patient_portal_rls.sql`](#supabase-migrations-20260529070000-patient-portal-rls-sql)
+- [`supabase/migrations/20260601000000_link_patient_identity.sql`](#supabase-migrations-20260601000000-link-patient-identity-sql)
 - [`project-status/index.html`](#project-status-index-html)
 - [`.claude/hooks/compliance_backcheck.py`](#claude-hooks-compliance-backcheck-py)
 - [`.claude/launch.json`](#claude-launch-json)
@@ -265,11 +266,15 @@ start. **Do not describe as "compliant" at any score.**
   and returns an audit summary. Pending: wire into the Trust's documented erasure/rectification process.
 - ⚠️ **PII encryption at rest** for `waitlist_entries` — use *current* Supabase-recommended
   primitives (Vault / app-layer envelope), **not** deprecated pgsodium TCE. Use standard
-  randomized AEAD, not "deterministic AEAD."
+  randomized AEAD, not "deterministic AEAD." **Raised priority:** `waitlist_entries.nhs_number`
+  (added 2026-06-01 for identity matching, §10) is personal data now stored at rest — it must be
+  covered by this control and by the DPIA before go-live.
 
 ## 3. Common Law Confidentiality + Caldicott Principles 👤
 - ✅ Justify the purpose (waitlist accuracy) — documented in app copy.
-- ✅ Use the minimum necessary PII (none in the patient-facing layer).
+- ✅ Use the minimum necessary PII — **none in either patient-facing layer**: the SMS page is UUID-only, and
+  the portal client query selects explicit non-PII columns (the `nhs_number` match key added in §10 is stored
+  on the record for staff/matching but is never sent to the patient's browser).
 - ⚠️👤 Access on a need-to-know basis — RLS scopes admin reads to `hospital_id`; confirm
   `auth.current_hospital_id()` is correct and tested.
 - ❌ Duty to share balanced against duty to protect — documented by Caldicott Guardian.
@@ -374,8 +379,10 @@ Five-pillar routing (where each pillar is evidenced in this repo):
 
 - ✅ **Strict auth gating.** `onAuthStateChange` + `getSession` route the UI: no session ⇒ login
   screen only; the dashboard is never shown without a session.
-- ✅ **IDOR-safe reads.** The data query (`from('waitlist_entries').select('*')`) passes **no user id**;
-  isolation is enforced server-side by RLS on `auth.uid()`. No client-supplied identifier chooses whose data loads.
+- ✅ **IDOR-safe + data-minimised reads.** The data query passes **no user id** (isolation is enforced
+  server-side by RLS on `auth.uid()`; no client-supplied identifier chooses whose data loads) **and now selects
+  only explicit non-PII columns** (`procedure, status, referred_at, created_at`) — it deliberately never pulls
+  `nhs_number` or `patient_user_id` into the browser (UK GDPR data minimisation, §2). Closes the prior `select('*')` TODO.
 - ✅ **Patient SELECT policy now in code.** `pol_entries_patient_select` (migration
   `20260529070000_patient_portal_rls.sql`) = `FOR SELECT TO authenticated USING (patient_user_id = auth.uid())`,
   on the `patient_user_id` column added by the base schema (`20260527000000_base_schema.sql`). This closes the
@@ -385,9 +392,20 @@ Five-pillar routing (where each pillar is evidenced in this repo):
   `waitlist_entries` (incl. `patient_user_id`, `status` CHECK with `PENDING_CANCELLATION`), `auth.current_hospital_id()`,
   `sms_dispatch_jobs` + `get_next_sms_batch()`. Minimal/dev foundation — **replace with the Trust's real tables**
   if one exists (point the app at those and delete this file).
+- ✅ **Identity-matching step now in code.** `link_my_waitlist_record()` (migration
+  `20260601000000_link_patient_identity.sql`, SECURITY DEFINER, `authenticated`-only) reads the caller's **own
+  verified NHS Number** from the request JWT (claim `nhs_number`, gated on `identity_proofing_level = 'P9'`),
+  validates it (modulus-11), and self-assigns `patient_user_id = auth.uid()` on matching **unclaimed** rows
+  (first-claim-wins). Takes **no parameters** → IDOR-safe by construction (a caller can only ever claim their own
+  verified rows for their own uid); fail-closed (missing/invalid number or sub-P9 → 0 rows linked). Adds a
+  `waitlist_entries.nhs_number` column (modulus-11 CHECK + normalised expression index) as the match key.
+  *Code-reviewed, not yet executed (no live DB this session).*
 - 🚫👤 **Still required before real patient data shows (NOT closable in SQL alone):** (a) wire real NHS Login OIDC
-  into Supabase Auth (portal mocks it today); (b) an **identity-matching step** that sets
-  `waitlist_entries.patient_user_id` from the verified NHS Login subject. Until (b) runs, every row stays NULL → portal correctly empty.
+  into Supabase Auth (portal mocks it today); (b) confirm the **JWT claim mapping** the matcher assumes
+  (`nhs_number`, `identity_proofing_level='P9'`) matches the real NHS Login → Supabase OIDC config, and decide
+  where linking runs (post-login/access-token hook recommended over the client calling the RPC); (c) the Trust's
+  ingest/PAS must populate `waitlist_entries.nhs_number`. Until (a)+(b) align and rows carry a number, every row
+  stays NULL → portal correctly empty.
 - ⚠️ **Mock NHS Login.** The "Sign in with NHS Login" button simulates OIDC; for local testing it
   reveals a form where the tester types their own credentials. **No credentials are stored in the repo.**
   Production must swap in the real NHS Login OIDC provider (`signInWithOAuth`) — 👤 integration + assurance.
@@ -424,7 +442,7 @@ Five-pillar routing (where each pillar is evidenced in this repo):
 3. Does it move, log, or expose any PII? → re-check §2, §3, §6, §7.
 4. Update the status markers here in the same commit.
 
-_Last reviewed: 2026-05-31._
+_Last reviewed: 2026-06-01._
 
 **Changelog — 2026-05-29 (NHS guideline back-check):**
 - §1 — Mitigated the instant-irreversible auto-cancel hazard: added a frontend confirmation gate
@@ -529,6 +547,23 @@ _Last reviewed: 2026-05-31._
   past the original logout deadline. `node --check portal/app.js` OK.
 - Honesty note: a built + live-verified control, **not** a compliance claim. Portal go-live still needs the
   §10 👤 items (real NHS Login OIDC, identity-matching) + Trust sign-offs (DPO/Caldicott/CSO).
+
+**Changelog — 2026-06-01 (identity matching + portal data minimisation):**
+- §10 — Added `link_my_waitlist_record()` (migration `20260601000000_link_patient_identity.sql`): the
+  identity-matching step that links a verified NHS Login patient (`auth.uid()`) to their waitlist row(s) by
+  matching the verified `nhs_number` JWT claim (gated on `identity_proofing_level='P9'`, modulus-11 validated).
+  Takes no parameters → IDOR-safe by construction; fail-closed; first-claim-wins. Adds `waitlist_entries.nhs_number`
+  (modulus-11 CHECK + normalised expression index) as the match key. Status of the identity-matching blocker `🚫 → ✅`
+  (code); the remaining gate is 👤 integration (real OIDC + confirming the claim mapping + ingest populating the column).
+- §10/§2 — Closed the `select('*')` data-minimisation TODO: `portal/app.js` now selects only
+  `procedure, status, referred_at, created_at` — never `nhs_number`/`patient_user_id` to the browser.
+  Verified live (mock dashboard still renders: greeting, procedure, Active chip, referred date; no console errors).
+- §2 — Raised the at-rest-encryption priority: `nhs_number` is now personal data stored on `waitlist_entries`;
+  flagged that it must be covered by the encryption-at-rest control **and** the DPIA before go-live.
+- §3 — Restated "minimum necessary PII": both patient-facing layers remain PII-free in the client; the match key
+  is stored for staff/matching only.
+- Honesty note: code-reviewed, **not** executed (no live Postgres this session) and **not** a compliance claim.
+  This is a deliberate, documented increase in the data-protection surface (storing NHS Number) that the DPIA must cover.
 ```
 
 ---
@@ -1691,9 +1726,13 @@ body {
         hospital_name: "Royal Surrey County Hospital",
       };
     }
+    // Data minimisation (UK GDPR / COMPLIANCE.md §2): select ONLY the non-PII
+    // columns the dashboard renders. Deliberately EXCLUDES nhs_number and
+    // patient_user_id — the portal never needs the patient's identifiers in the
+    // browser, even though RLS already limits rows to the caller's own record.
     const { data, error } = await db
       .from("waitlist_entries")
-      .select("*")              // TODO: narrow to explicit columns (data minimisation) once schema confirmed
+      .select("procedure, status, referred_at, created_at")
       .order("created_at", { ascending: false })
       .limit(1);
     if (error) throw error;
@@ -2099,7 +2138,7 @@ window.__ENV = {
     referrerpolicy="no-referrer"></script>
   <!-- Runtime config: PUBLIC url + anon key only (env.js is gitignored; see env.example.js). -->
   <script src="env.js"></script>
-  <script src="app.js?v=20260531" defer></script>
+  <script src="app.js?v=20260601" defer></script>
 </body>
 </html>
 ```
@@ -3524,6 +3563,159 @@ COMMENT ON POLICY pol_entries_patient_select ON waitlist_entries IS
 -- a patient JWT carries neither a hospital claim nor admin rights — so each role
 -- only ever sees its intended rows. (If staff accounts could also be patients,
 -- revisit; today the claim sets are disjoint.)
+```
+
+---
+
+
+## `supabase/migrations/20260601000000_link_patient_identity.sql`
+
+```sql
+-- =============================================================================
+-- IDENTITY MATCHING — link a verified NHS Login patient to their waitlist row(s)
+-- =============================================================================
+-- Closes the §10 "identity-matching" dependency: `waitlist_entries.patient_user_id`
+-- is NULL by default, so the portal (RLS: USING patient_user_id = auth.uid()) shows
+-- a signed-in patient NOTHING until something links their auth identity to their
+-- clinical record. This migration provides that link.
+--
+-- HOW THE MATCH WORKS (and why it is IDOR-safe by construction):
+--   • NHS Login P9 (full identity verification) returns the patient's VERIFIED NHS
+--     Number as a JWT claim. That number is the join key between "this authenticated
+--     person" (auth.uid()) and "this clinical record" (waitlist_entries).
+--   • `link_my_waitlist_record()` reads the caller's OWN verified NHS Number from the
+--     request JWT (never a client-supplied parameter), validates it (modulus-11), and
+--     sets patient_user_id = auth.uid() on matching rows that are NOT yet claimed.
+--   • A caller can therefore only ever claim rows matching THEIR OWN verified number,
+--     and only ever assign them to THEIR OWN uid. There is no parameter an attacker
+--     could change to reach another patient's row. First-claim-wins (… IS NULL guard).
+--   • Fail-closed: missing/invalid number, or identity not proven to P9 → 0 rows linked,
+--     no error leaked.
+--
+-- DEPENDENCIES (apply order): runs AFTER
+--   • 20260527000000_base_schema.sql        (waitlist_entries, patient_user_id, RLS)
+--   • 20260529050000_nhs_number_modulus11.sql (is_valid_nhs_number)
+--   • 20260529070000_patient_portal_rls.sql  (the patient SELECT policy this enables)
+--
+-- ⚠️ DATA PROTECTION (UK GDPR special-category / DPIA — see COMPLIANCE.md §2, §10):
+--   This adds an NHS Number column to waitlist_entries. The NHS Number is PERSONAL,
+--   special-category-adjacent data. It is:
+--     • the clinical record's identifier (mirrors a real PAS waitlist row — expected),
+--     • read-scoped to staff by the existing admin RLS (hospital_id), never anon,
+--     • validated by a modulus-11 CHECK at the column,
+--     • kept OUT of the patient-facing client query (portal/app.js selects explicit
+--       non-PII columns only — data minimisation).
+--   It MUST still be covered by the DPIA and the at-rest-encryption item (§2). Storing
+--   it is a deliberate, documented increase in the data-protection surface.
+--
+-- 👤 INTEGRATION ASSUMPTIONS (confirm against the real NHS Login ↔ Supabase wiring;
+--    cannot be verified in code alone):
+--   • JWT claim name for the verified number is 'nhs_number'.
+--   • JWT claim name for the identity-proofing level is 'identity_proofing_level',
+--     and the value for full verification is 'P9'. Adjust REQUIRED_PROOFING / the
+--     claim names below to match your OIDC mapping. Until they match, this fn fails
+--     CLOSED (links nothing) — safe, but configure it correctly to enable matching.
+--   • Best practice: run this linking server-side in a post-login / custom
+--     access-token hook. Exposing it as an authenticated RPC (as here) is safe
+--     because it only ever self-assigns the caller's own verified identity, but a
+--     server-side hook removes the need for the client to call it at all.
+-- Idempotent + safe to re-run. Target: PostgreSQL 15.
+-- =============================================================================
+
+-- ── 1. NHS Number on the clinical record (the match key) ─────────────────────
+ALTER TABLE waitlist_entries
+    ADD COLUMN IF NOT EXISTS nhs_number TEXT;
+
+COMMENT ON COLUMN waitlist_entries.nhs_number IS
+    'Patient NHS Number (PII). The Trust''s ingest/PAS populates this. Validated by '
+    'modulus-11 CHECK; admin-RLS-scoped; never exposed to anon or to the patient client '
+    'query. Used only to match a verified NHS Login identity to this row. DPIA scope.';
+
+-- Modulus-11 CHECK at the column (no IF NOT EXISTS for ADD CONSTRAINT in PG → guard).
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'chk_entries_nhs_number'
+    ) THEN
+        ALTER TABLE waitlist_entries
+            ADD CONSTRAINT chk_entries_nhs_number
+            CHECK (nhs_number IS NULL OR is_valid_nhs_number(nhs_number));
+    END IF;
+END;
+$$;
+
+-- Expression index on the normalised number (strip spaces/dashes) so the match
+-- lookup below is sargable. Only index rows that actually carry a number.
+CREATE INDEX IF NOT EXISTS idx_waitlist_entries_nhs_number_norm
+    ON waitlist_entries ((regexp_replace(nhs_number, '[\s-]', '', 'g')))
+    WHERE nhs_number IS NOT NULL;
+
+
+-- ── 2. link_my_waitlist_record() — self-service identity match ───────────────
+-- SECURITY DEFINER: bypasses RLS to set patient_user_id (there is intentionally no
+-- patient UPDATE policy). Safe because it takes NO parameters and acts only on the
+-- caller's own verified claim + own uid. authenticated-only.
+CREATE OR REPLACE FUNCTION link_my_waitlist_record()
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    -- 👤 Adjust to match the real NHS Login → Supabase claim mapping (see header).
+    REQUIRED_PROOFING CONSTANT TEXT := 'P9';
+    v_claims  JSONB;
+    v_uid     UUID;
+    v_nhs_raw TEXT;
+    v_nhs     TEXT;
+    v_proof   TEXT;
+    v_linked  INTEGER := 0;
+BEGIN
+    v_uid := auth.uid();
+    IF v_uid IS NULL THEN
+        -- Not authenticated (defensive; GRANT already restricts to authenticated).
+        RETURN jsonb_build_object('linked', 0, 'status', 'not_authenticated');
+    END IF;
+
+    v_claims  := NULLIF(current_setting('request.jwt.claims', true), '')::jsonb;
+    v_nhs_raw := v_claims ->> 'nhs_number';
+    v_proof   := v_claims ->> 'identity_proofing_level';
+
+    -- Require full identity verification before trusting the number for matching.
+    IF v_proof IS DISTINCT FROM REQUIRED_PROOFING THEN
+        RETURN jsonb_build_object('linked', 0, 'status', 'identity_not_p9');
+    END IF;
+
+    -- Must have a syntactically valid (modulus-11) verified number.
+    IF v_nhs_raw IS NULL OR NOT is_valid_nhs_number(v_nhs_raw) THEN
+        RETURN jsonb_build_object('linked', 0, 'status', 'no_verified_nhs_number');
+    END IF;
+
+    v_nhs := regexp_replace(v_nhs_raw, '[\s-]', '', 'g');
+
+    -- Claim ONLY this caller's own, not-yet-linked rows. First-claim-wins.
+    -- `nhs_number IS NOT NULL` is logically implied (NULL never matches) but stated
+    -- explicitly so the planner can use the partial expression index.
+    UPDATE waitlist_entries
+       SET patient_user_id = v_uid
+     WHERE patient_user_id IS NULL
+       AND nhs_number IS NOT NULL
+       AND regexp_replace(nhs_number, '[\s-]', '', 'g') = v_nhs;
+
+    GET DIAGNOSTICS v_linked = ROW_COUNT;
+
+    RETURN jsonb_build_object('linked', v_linked, 'status', 'ok');
+END;
+$$;
+
+COMMENT ON FUNCTION link_my_waitlist_record() IS
+    'Links the caller''s VERIFIED NHS Login identity (auth.uid()) to their waitlist '
+    'row(s) by matching the verified NHS Number JWT claim. Takes no parameters; only '
+    'ever self-assigns the caller''s own unclaimed rows. IDOR-safe, fail-closed, '
+    'first-claim-wins. authenticated-only.';
+
+REVOKE EXECUTE ON FUNCTION link_my_waitlist_record() FROM PUBLIC;
+GRANT  EXECUTE ON FUNCTION link_my_waitlist_record() TO authenticated;
 ```
 
 ---

@@ -152,9 +152,13 @@
         hospital_name: "Royal Surrey County Hospital",
       };
     }
+    // Data minimisation (UK GDPR / COMPLIANCE.md §2): select ONLY the non-PII
+    // columns the dashboard renders. Deliberately EXCLUDES nhs_number and
+    // patient_user_id — the portal never needs the patient's identifiers in the
+    // browser, even though RLS already limits rows to the caller's own record.
     const { data, error } = await db
       .from("waitlist_entries")
-      .select("*")              // TODO: narrow to explicit columns (data minimisation) once schema confirmed
+      .select("procedure, status, referred_at, created_at")
       .order("created_at", { ascending: false })
       .limit(1);
     if (error) throw error;

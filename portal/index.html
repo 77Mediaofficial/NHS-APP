@@ -7,11 +7,12 @@
   <title>Patient Hub — NHS</title>
   <meta name="description" content="Securely view your NHS waitlist status and manage your care." />
 
-  <!-- CSP: defence-in-depth (authoritative policy belongs in HTTP headers / vercel.json).
-       connect-src allows Supabase REST + Auth + Realtime (wss). No anon data path here —
-       all reads run under the authenticated user's JWT so RLS isolates the patient. -->
+  <!-- CSP: defence-in-depth. The AUTHORITATIVE policy is the HTTP header in portal/vercel.json;
+       this meta mirrors it so the two never diverge. connect-src allows Supabase REST + Auth +
+       Realtime (wss). No anon data path here — all reads run under the authenticated user's JWT
+       so RLS isolates the patient. -->
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" />
+        content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests" />
 
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
   <link rel="stylesheet" href="styles.css?v=20260531" />

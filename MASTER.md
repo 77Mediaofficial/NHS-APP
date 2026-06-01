@@ -9,7 +9,7 @@
 > gitignored `env.js` is excluded and only the `env.example.js` template appears.
 
 
-**38 files** in this bundle.
+**39 files** in this bundle.
 
 
 ## Contents
@@ -30,6 +30,7 @@
 - [`portal/env.example.js`](#portal-env-example-js)
 - [`portal/index.html`](#portal-index-html)
 - [`portal/styles.css`](#portal-styles-css)
+- [`portal/vercel.json`](#portal-vercel-json)
 - [`supabase/config.toml`](#supabase-config-toml)
 - [`supabase/functions/_shared/nhs-number.ts`](#supabase-functions-shared-nhs-number-ts)
 - [`supabase/functions/sms-dispatch-worker/index.ts`](#supabase-functions-sms-dispatch-worker-index-ts)
@@ -345,11 +346,13 @@ Five-pillar routing (where each pillar is evidenced in this repo):
   with `integrity=sha384-…` + `crossorigin="anonymous"` + `referrerpolicy="no-referrer"`.
   A floating `@2` tag cannot be SRI-protected (bytes change per release) — pinned + hashed instead.
   Bump version + hash together on upgrade. *Stronger option for the Trust:* self-host under `/vendor/`.
-- ✅ **Content-Security-Policy.** Authoritative header in `vercel.json` (`default-src 'none'`,
-  script/connect-src locked to self + jsdelivr + `*.supabase.co`, `frame-ancestors 'none'`,
-  `upgrade-insecure-requests`); defence-in-depth `<meta>` CSP also in `index.html`.
+- ✅ **Content-Security-Policy.** Authoritative header in **both** `frontend/vercel.json` **and**
+  `portal/vercel.json` (`default-src 'none'`, script/connect-src locked to self + jsdelivr + `*.supabase.co`
+  — portal also `wss://*.supabase.co` for realtime, `frame-ancestors 'none'`, `upgrade-insecure-requests`);
+  defence-in-depth `<meta>` CSP mirrors it in each `index.html` (kept byte-aligned with the header).
 - ✅ **HSTS + transport.** `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload`
-  + `upgrade-insecure-requests` in `vercel.json`. (TLS termination + HTTP→HTTPS handled by Vercel.)
+  + `upgrade-insecure-requests` in **both** `frontend/vercel.json` and `portal/vercel.json`. (TLS termination
+  + HTTP→HTTPS handled by Vercel.)
 - ✅ **Hardening headers** — `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
   `Referrer-Policy: no-referrer`, `Permissions-Policy` (geo/mic/camera/payment/usb/FLoC off), COOP + CORP same-origin.
 - ❌👤 **CREST-approved penetration test** commissioned + findings remediated (DTAC v2).
@@ -469,7 +472,8 @@ Five-pillar routing (where each pillar is evidenced in this repo):
   CONSENT + identity verification of both parties (the table records a decision, it does not make it), lawful basis
   for under-16s/incapacity, and a staff grant/revoke UI. *Code-reviewed, not executed.*
 - ✅ **No secrets in client / CSP / SRI.** Only the public URL + anon key (`portal/env.js`, gitignored);
-  defence-in-depth CSP meta; SRI-pinned `supabase-js@2.106.2`.
+  authoritative security headers (`portal/vercel.json`: CSP/HSTS/hardening) + a byte-aligned defence-in-depth
+  CSP meta; SRI-pinned `supabase-js@2.106.2`.
 - ✅ **Accessibility (WCAG 2.2 AA aim).** Elderly-friendly: larger base type, ≥56px touch targets,
   skip link, `:focus-visible`, `role="status"`/`alert`, progressive disclosure, reduced-motion, light/dark.
   Still ❌ formal audit + AT testing (shared with §5).
@@ -583,7 +587,8 @@ _Last reviewed: 2026-06-01._
   `portal/vercel.json`) that did not exist at the time — those changelog lines were premature/hallucinated, and
   no false claim landed in the committed repo (caught pre-commit). **Update 2026-05-31:**
   `20260529070000_patient_portal_rls.sql` was subsequently authored for real and is now committed (see §10
-  patient-SELECT RLS policy); `portal/vercel.json` still does **not** exist.
+  patient-SELECT RLS policy). **Update 2026-06-01:** `portal/vercel.json` now also exists for real (added in
+  this session's security-headers pass) — so both once-hallucinated paths are now legitimately present.
 
 **Changelog — 2026-05-31 (portal idle auto sign-out — §10 session hygiene closed):**
 - §10 — Built idle-timeout auto sign-out for the authenticated portal (shared/elderly-device safety; also
@@ -716,6 +721,16 @@ _Last reviewed: 2026-06-01._
   👤 Trust governance sign-offs (CSO/Hazard Log/CSCR, DPIA, DSPT, Caldicott, CREST pen test, Cyber Essentials
   Plus, formal WCAG audit, at-rest encryption). **No "compliant" claim at any point — only "built to align with,
   pending sign-off."**
+
+**Changelog — 2026-06-01 (portal authoritative security headers — closes a real gap):**
+- §6/§10 — Added `portal/vercel.json` with the full header set (CSP incl. `wss://*.supabase.co` for realtime,
+  HSTS preload, `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`,
+  COOP/CORP). Until now the portal had only a defence-in-depth `<meta>` CSP and **no authoritative
+  header-level policy** (the frontend had `vercel.json`; the portal did not) — a genuine gap, now closed.
+  Aligned the portal `<meta>` CSP byte-for-byte with the header (added `upgrade-insecure-requests`) so the two
+  cannot diverge. JSON validated.
+- Honesty/consistency: updated the old correction-note — `portal/vercel.json` (once hallucinated) now
+  legitimately exists. Not executed against a live deploy (header delivery to confirm at deploy time).
 ```
 
 ---
@@ -2229,11 +2244,12 @@ window.__ENV = {
   <title>Patient Hub — NHS</title>
   <meta name="description" content="Securely view your NHS waitlist status and manage your care." />
 
-  <!-- CSP: defence-in-depth (authoritative policy belongs in HTTP headers / vercel.json).
-       connect-src allows Supabase REST + Auth + Realtime (wss). No anon data path here —
-       all reads run under the authenticated user's JWT so RLS isolates the patient. -->
+  <!-- CSP: defence-in-depth. The AUTHORITATIVE policy is the HTTP header in portal/vercel.json;
+       this meta mirrors it so the two never diverge. connect-src allows Supabase REST + Auth +
+       Realtime (wss). No anon data path here — all reads run under the authenticated user's JWT
+       so RLS isolates the patient. -->
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" />
+        content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests" />
 
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
   <link rel="stylesheet" href="styles.css?v=20260531" />
@@ -2735,6 +2751,56 @@ body {
   .btn { border: 2px solid currentColor; }
   :where(a, button, input, summary, [tabindex]):focus-visible { outline: 3px solid Highlight; }
   .panel, .card { border: 1px solid currentColor; }
+}
+```
+
+---
+
+
+## `portal/vercel.json`
+
+```json
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains; preload"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "geolocation=(), microphone=(), camera=(), payment=(), usb=(), interest-cohort=()"
+        },
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin"
+        },
+        {
+          "key": "Cross-Origin-Resource-Policy",
+          "value": "same-origin"
+        }
+      ]
+    }
+  ]
 }
 ```
 

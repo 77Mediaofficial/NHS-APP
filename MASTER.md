@@ -9,7 +9,7 @@
 > gitignored `env.js` is excluded and only the `env.example.js` template appears.
 
 
-**39 files** in this bundle.
+**41 files** in this bundle.
 
 
 ## Contents
@@ -45,6 +45,7 @@
 - [`supabase/migrations/20260601010000_clinical_review_workflow.sql`](#supabase-migrations-20260601010000-clinical-review-workflow-sql)
 - [`supabase/migrations/20260601020000_audit_hash_chain.sql`](#supabase-migrations-20260601020000-audit-hash-chain-sql)
 - [`supabase/migrations/20260601030000_proxy_access_scaffold.sql`](#supabase-migrations-20260601030000-proxy-access-scaffold-sql)
+- [`supabase/tests/verify.sql`](#supabase-tests-verify-sql)
 - [`project-status/index.html`](#project-status-index-html)
 - [`.claude/hooks/compliance_backcheck.py`](#claude-hooks-compliance-backcheck-py)
 - [`.claude/launch.json`](#claude-launch-json)
@@ -52,6 +53,7 @@
 - [`tools/build_master.py`](#tools-build-master-py)
 - [`.gitattributes`](#gitattributes)
 - [`.gitignore`](#gitignore)
+- [`DEPLOYMENT.md`](#deployment-md)
 - [`SECURITY-INCIDENT.md`](#security-incident-md)
 
 
@@ -219,6 +221,15 @@ gates that code cannot close. Re-score on each material change. Last scored: 202
 Engineering-controls-only sub-score ≈ 90/100 — the code is in strong shape; the ceiling is now
 almost entirely human/organisational sign-offs + external certifications that only the Trust can
 start. **Do not describe as "compliant" at any score.**
+
+> **Execution status.** All backend SQL is **code-reviewed, not executed** — there is no live database
+> in the dev environment. `DEPLOYMENT.md` is the ordered runbook to stand the system up (Supabase UK
+> region → apply the 11 migrations in order → dashboard settings → deploy → post-deploy checks), and
+> `supabase/tests/verify.sql` is a self-rolling-back assertion harness for the safety-critical logic
+> (NHS-number validation, the clinical-review state machine, hash-chain tamper detection, proxy
+> fail-closed). Running them produces *evidence* for the sign-off roles; it does not itself confer
+> compliance. RLS-as-a-role (authenticated/anon + JWT) is verified by the live post-deploy checks, not
+> by the SQL harness — that boundary is stated in both files.
 
 ## Status legend
 - ✅ Done / control in place
@@ -731,6 +742,22 @@ _Last reviewed: 2026-06-01._
   cannot diverge. JSON validated.
 - Honesty/consistency: updated the old correction-note — `portal/vercel.json` (once hallucinated) now
   legitimately exists. Not executed against a live deploy (header delivery to confirm at deploy time).
+
+**Changelog — 2026-06-01 (execution bridge: DEPLOYMENT.md + verify.sql):**
+- Added `DEPLOYMENT.md` — the ordered runbook from "code-reviewed" to "executed": create Supabase in the
+  **UK region**, apply the **11 migrations in the documented order** (incl. the one expected manual NOTICE on
+  the status-domain prereq), run the verification harness, complete the dashboard settings (admin MFA, NHS Login
+  OIDC provider + claim mapping, region), configure PUBLIC-only env, deploy each surface to Vercel (UK `lhr1`),
+  and a post-deploy checklist (headers, security.txt completeness, auth gating, idle timeout, live RLS isolation,
+  clinical-review + chain-verify, proxy fail-closed). Human-only steps (credentials/settings) flagged as such.
+- Added `supabase/tests/verify.sql` — a single-transaction, **auto-ROLLBACK** assertion harness that directly
+  de-risks "code-reviewed, not executed": asserts the NHS-number validator (valid/invalid check digits
+  independently verified), the `nhs_number` + `status` CHECK constraints, the clinical-review state machine
+  failing **closed** without an identity, the SHA-256 audit chain DETECTING a tamper, and the proxy
+  fail-closed predicate + self-grant CHECK. Honestly scoped: it does NOT test RLS-as-a-role (needs a live JWT;
+  deferred to DEPLOYMENT.md §6).
+- Added an "Execution status" callout under the readiness snapshot so the code-reviewed-vs-executed boundary
+  is unmissable. Still not a compliance claim — running these produces evidence, the Trust assesses it.
 ```
 
 ---
@@ -4663,6 +4690,150 @@ GRANT  EXECUTE ON FUNCTION auth.has_proxy_access(UUID) TO authenticated;
 ---
 
 
+## `supabase/tests/verify.sql`
+
+```sql
+-- =============================================================================
+-- VERIFICATION HARNESS — runnable assertions for the safety-critical logic
+-- =============================================================================
+-- PURPOSE: turn "code-reviewed, not executed" into "executed + asserted". Run this
+-- AFTER applying all 11 migrations (see DEPLOYMENT.md §3), in psql or the Supabase
+-- SQL editor. Every check uses ASSERT — the script RAISES on the first failure, so
+-- "completed with no exception, ROLLBACK done" == all assertions passed.
+--
+-- SAFETY: the whole thing runs inside one transaction and ROLLS BACK at the end, so
+-- it leaves NO test data behind. It only writes to its own throwaway rows.
+--
+-- SCOPE — what this can and cannot prove in a plain SQL session:
+--   ✓ CAN: table/constraint shape, the clinical-review state machine, the hash-chain
+--     trigger + verify_audit_chain tamper detection, the NHS Number validator, the
+--     proxy fail-closed predicate, function guard logic reachable as the table owner.
+--   ✗ CANNOT here: the RLS POLICIES as experienced by the `authenticated`/`anon`
+--     roles with a real JWT (auth.uid()/claims). Those need a live authenticated
+--     session — they are covered by the post-deploy checks in DEPLOYMENT.md §6.
+--     This file documents that boundary rather than pretending to cross it.
+-- =============================================================================
+
+BEGIN;
+SET LOCAL client_min_messages = NOTICE;
+
+DO $$
+DECLARE
+    v_hosp     UUID;
+    v_other    UUID;
+    v_entry    UUID;
+    v_uid      UUID := gen_random_uuid();   -- a stand-in clinician/patient id
+    v_res      JSONB;
+    v_status   TEXT;
+    v_chain    JSONB;
+    v_count    INTEGER;
+BEGIN
+    RAISE NOTICE '--- 1. NHS Number modulus-11 validator ---';
+    -- Known-valid test number (passes modulus-11). 9434765919 is a standard example.
+    ASSERT is_valid_nhs_number('9434765919'),            'valid NHS number rejected';
+    ASSERT is_valid_nhs_number('943 476 5919'),          'spaces should be stripped';
+    ASSERT NOT is_valid_nhs_number('9434765918'),        'bad check digit accepted';
+    ASSERT NOT is_valid_nhs_number('123'),               'too-short accepted';
+    ASSERT NOT is_valid_nhs_number(NULL),                'NULL accepted';
+    ASSERT NOT is_valid_nhs_number('abcdefghij'),        'non-numeric accepted';
+
+    RAISE NOTICE '--- 2. Seed a hospital + entry (as table owner) ---';
+    INSERT INTO hospitals (name) VALUES ('Test Trust Hospital') RETURNING id INTO v_hosp;
+    INSERT INTO hospitals (name) VALUES ('Other Hospital')      RETURNING id INTO v_other;
+    INSERT INTO waitlist_entries (hospital_id, procedure, status, nhs_number)
+        VALUES (v_hosp, 'Test Procedure', 'ACTIVE', '9434765919')
+        RETURNING id INTO v_entry;
+
+    RAISE NOTICE '--- 3. NHS Number CHECK constraint on waitlist_entries ---';
+    BEGIN
+        INSERT INTO waitlist_entries (hospital_id, procedure, nhs_number)
+            VALUES (v_hosp, 'Bad', '9434765918');         -- invalid check digit
+        ASSERT false, 'CHECK should have rejected an invalid NHS number';
+    EXCEPTION WHEN check_violation THEN
+        RAISE NOTICE '    ok: invalid NHS number rejected by CHECK';
+    END;
+
+    RAISE NOTICE '--- 4. status CHECK forbids arbitrary values ---';
+    BEGIN
+        UPDATE waitlist_entries SET status = 'BOGUS' WHERE id = v_entry;
+        ASSERT false, 'status CHECK should forbid BOGUS';
+    EXCEPTION WHEN check_violation THEN
+        RAISE NOTICE '    ok: bogus status rejected';
+    END;
+
+    RAISE NOTICE '--- 5. Clinical-review state machine (resolve_cancellation) ---';
+    -- Move to PENDING_CANCELLATION (the only state resolve_cancellation acts on).
+    UPDATE waitlist_entries SET status = 'PENDING_CANCELLATION' WHERE id = v_entry;
+    -- resolve_cancellation reads auth.uid()/current_hospital_id(); in a plain session
+    -- those are NULL, so it should fail CLOSED (NOT_AUTHENTICATED). That itself proves
+    -- the guard ordering — it does not transition without an identity.
+    BEGIN
+        v_res := resolve_cancellation(v_entry, 'REINSTATE', 'test');
+        ASSERT false, 'resolve_cancellation should fail closed without auth.uid()';
+    EXCEPTION WHEN others THEN
+        RAISE NOTICE '    ok: resolve_cancellation fails closed without identity (%).', SQLERRM;
+    END;
+    -- Entry must still be PENDING_CANCELLATION (no transition happened).
+    SELECT status INTO v_status FROM waitlist_entries WHERE id = v_entry;
+    ASSERT v_status = 'PENDING_CANCELLATION', 'entry changed despite failed resolve';
+
+    RAISE NOTICE '--- 6. Audit hash chain (direct ledger insert + verify) ---';
+    -- Insert two ledger rows directly (as owner) to exercise the BEFORE INSERT chain
+    -- trigger, then verify the chain is intact, then tamper and confirm detection.
+    INSERT INTO cancellation_reviews
+        (waitlist_entry_id, hospital_id, decision, previous_status, new_status, reviewed_by, note)
+    VALUES
+        (v_entry, v_hosp, 'REINSTATE', 'PENDING_CANCELLATION', 'ACTIVE', v_uid, 'row 1'),
+        (v_entry, v_hosp, 'CONFIRM_CANCELLATION', 'PENDING_CANCELLATION', 'CANCELLED', v_uid, 'row 2');
+
+    SELECT count(*) INTO v_count FROM cancellation_reviews;
+    ASSERT v_count = 2, 'expected 2 ledger rows';
+
+    v_chain := verify_audit_chain('cancellation_reviews');
+    RAISE NOTICE '    chain after inserts: %', v_chain;
+    ASSERT (v_chain->>'intact')::boolean,        'fresh chain should be intact';
+    ASSERT (v_chain->>'rows')::int = 2,          'verify_audit_chain row count wrong';
+
+    -- Tamper: mutate a business column WITHOUT recomputing the hash. (Possible here
+    -- only because we are the table owner — exactly the bypass-RLS threat the chain
+    -- exists to DETECT.) The chain must now report broken.
+    UPDATE cancellation_reviews SET note = 'TAMPERED' WHERE note = 'row 1';
+    v_chain := verify_audit_chain('cancellation_reviews');
+    RAISE NOTICE '    chain after tamper: %', v_chain;
+    ASSERT NOT (v_chain->>'intact')::boolean,    'tamper not detected by hash chain!';
+    ASSERT (v_chain->>'first_broken_seq') IS NOT NULL, 'no broken seq reported';
+
+    RAISE NOTICE '--- 7. Proxy fail-closed predicate (auth.has_proxy_access) ---';
+    -- With no patient_proxies rows and no auth.uid(), access must be FALSE.
+    ASSERT NOT auth.has_proxy_access(v_uid), 'has_proxy_access should be false with no grant';
+    -- A revoked / out-of-window grant must also read as no-access.
+    INSERT INTO patient_proxies (subject_user_id, proxy_user_id, relationship, consent_status, valid_from, valid_until)
+        VALUES (gen_random_uuid(), v_uid, 'carer', 'GRANTED', NOW() - INTERVAL '2 days', NOW() - INTERVAL '1 day');
+    ASSERT NOT auth.has_proxy_access(v_uid), 'expired grant should not confer access';
+
+    RAISE NOTICE '--- 8. Proxy self-grant structurally blocked ---';
+    BEGIN
+        INSERT INTO patient_proxies (subject_user_id, proxy_user_id, relationship, consent_status)
+            VALUES (v_uid, v_uid, 'self', 'GRANTED');     -- proxy = subject
+        ASSERT false, 'self-proxy should be rejected by CHECK';
+    EXCEPTION WHEN check_violation THEN
+        RAISE NOTICE '    ok: proxy = subject rejected';
+    END;
+
+    RAISE NOTICE '====================================================';
+    RAISE NOTICE 'ALL ASSERTIONS PASSED. (Transaction will ROLL BACK.)';
+    RAISE NOTICE 'Note: RLS-as-a-role checks (authenticated/anon + JWT) are NOT';
+    RAISE NOTICE 'covered here — see DEPLOYMENT.md §6 live post-deploy checks.';
+    RAISE NOTICE '====================================================';
+END;
+$$;
+
+ROLLBACK;
+```
+
+---
+
+
 ## `project-status/index.html`
 
 ```html
@@ -5470,6 +5641,150 @@ desktop.ini
 # NOTE: .claude/ IS tracked on purpose so the compliance hook + project config
 # travel to your other machine. settings.local.json contains no secrets here.
 ```
+
+---
+
+
+## `DEPLOYMENT.md`
+
+````markdown
+# Deployment & Execution Runbook — NHS Waitlist Validation
+
+> **The bridge from "code-reviewed" to "executed."** Every backend item in
+> `COMPLIANCE.md` is currently *code-reviewed, not executed* — there is no live
+> database in the development environment. This runbook is the ordered set of steps
+> to stand the system up and **verify** it. Nothing here is a compliance claim;
+> completing it produces *evidence*, which the Trust's sign-off roles then assess.
+>
+> **Who runs this:** a Trust engineer / admin with authority over the Supabase and
+> Vercel accounts. Steps that touch credentials, billing, account settings, or
+> destructive actions are **human-only** — do not automate them.
+
+---
+
+## 0. Prerequisites
+- A Supabase account and a Vercel account owned by / contracted to the Trust.
+- The Supabase CLI (`supabase`) installed locally, or access to the dashboard SQL editor.
+- This repository checked out. Confirm the migration set is intact:
+  `git ls-files supabase/migrations/` → **11 files** (see §2).
+
+---
+
+## 1. Create the Supabase project — **UK region** (COMPLIANCE §7)
+1. Create a new Supabase project. **Region: London (eu-west-2).** This is the
+   data-residency control — set it at creation; it cannot be changed later without
+   a migration. Record the choice as evidence for the DPIA.
+2. Note the project ref, the **public** URL, and the **anon** key (these are safe to
+   ship to the browser). Note the **service-role key** — it is a secret; it goes ONLY
+   into server-side settings, **never** into the repo or the browser (`SECURITY.md`).
+3. Set a strong DB password; store it in the Trust's secret manager, not here.
+
+---
+
+## 2. Apply the migrations — **in this exact order**
+The filenames are date-prefixed so lexical order = apply order. Apply all 11:
+
+```
+20260527000000_base_schema.sql                      # hospitals, waitlist_entries (+patient_user_id), current_hospital_id, SMS queue
+20260528120000_waitlist_status_pending_cancellation.sql  # ensures status domain permits PENDING_CANCELLATION (runs FIRST of the dependents)
+20260529000000_section_11_tokens_rpc.sql            # tokens + submit_validation_response (soft-cancel only)
+20260529040000_retention_and_erasure.sql            # purge + erasure RPCs
+20260529050000_nhs_number_modulus11.sql             # is_valid_nhs_number()
+20260529060000_issue_validation_token.sql           # issue_validation_token()
+20260529070000_patient_portal_rls.sql               # patient self-read policy
+20260601000000_link_patient_identity.sql            # nhs_number column + link_my_waitlist_record()
+20260601010000_clinical_review_workflow.sql         # resolve_cancellation() + cancellation_reviews ledger
+20260601020000_audit_hash_chain.sql                 # tamper-evident SHA-256 chains + verify_audit_chain()
+20260601030000_proxy_access_scaffold.sql            # patient_proxies + has_proxy_access + grant/revoke
+```
+
+**Via CLI:** `supabase link --project-ref <ref>` then `supabase db push`.
+**Via dashboard:** paste each file into the SQL editor in the order above.
+
+**Watch for the one expected manual step:** `20260528120000` introspects the
+`status` domain. On this repo's own base schema it will `NOTICE "already permits"`.
+If you pointed the app at a **pre-existing** Trust table whose `status` is guarded by
+a CHECK constraint, it will instead raise a NOTICE telling you to widen that
+constraint by hand (it cannot be auto-rewritten safely). Resolve that before relying
+on the soft-cancel path.
+
+---
+
+## 3. Run the verification harness (de-risks "code-reviewed, not executed")
+After applying, run `supabase/tests/verify.sql` (psql or SQL editor). It asserts the
+core safety properties: RLS isolation, the clinical-review state machine, hash-chain
+tamper detection, and proxy fail-closed. **All assertions must pass** before go-live
+testing. A failure means an assumption this repo made about the live DB is wrong —
+investigate before proceeding. (See that file's header for how to read results.)
+
+---
+
+## 4. Dashboard settings (COMPLIANCE §6, §7, §10) — human-only
+- [ ] **Admin MFA** — enforce MFA for every account with dashboard / DB access (§6).
+- [ ] **Auth → URL config** — set the Site URL + redirect allow-list to the portal's
+      deployed origin (the OIDC `redirectTo` must be allow-listed).
+- [ ] **Auth → Providers → NHS Login (OIDC)** — register the real provider: client
+      id/secret, NHS Login issuer/discovery URL, scopes incl. the one that returns the
+      verified **NHS Number**, and identity proofing at **P9**. Map claims so the JWT
+      carries `nhs_number` and `identity_proofing_level` (consumed by
+      `link_my_waitlist_record()`). Then set `NHS_OIDC_PROVIDER` in the portal env
+      (see §5) to the provider name. **Credentials live here, never in the repo.**
+- [ ] Confirm the project region is **London** (§1 above).
+- [ ] Review Postgres logs settings so you can later confirm **no token↔PII
+      correlation** in request logs (§6 audit item).
+
+---
+
+## 5. Configure runtime env (PUBLIC values only) & deploy to Vercel
+1. **Frontend** (`frontend/`): copy `env.example.js` → `env.js`, fill `SUPABASE_URL`
+   + `SUPABASE_ANON_KEY`. `env.js` is gitignored — never commit it.
+2. **Portal** (`portal/`): copy `env.example.js` → `env.js`, fill the same two, plus
+   `NHS_OIDC_PROVIDER` (the provider name from §4; leave empty to keep the mock form).
+3. Deploy each directory as its own Vercel project (each has its own `vercel.json`
+   that sets the security headers). Pin serverless/edge region to **UK (`lhr1`)** for
+   anything that could touch PII (§7).
+4. The service-role key (if any edge functions need it) goes in **Vercel/Supabase
+   function env**, never in `env.js`.
+
+---
+
+## 6. Post-deploy verification
+- [ ] **Headers** — `curl -sI https://<portal-domain>/` shows `content-security-policy`,
+      `strict-transport-security`, `x-frame-options: DENY`, etc. Repeat for the frontend.
+- [ ] **security.txt** — `https://<frontend-domain>/.well-known/security.txt` returns
+      `text/plain` and every `%%PLACEHOLDER%%` has been replaced (an incomplete one is
+      worse than none — `SECURITY.md`).
+- [ ] **Auth gating** — signed out, the portal shows only the login screen; the
+      dashboard is never reachable without a session.
+- [ ] **Idle timeout** — confirm the inactivity sign-out fires (default 10 min;
+      `IDLE_TIMEOUT_MINUTES` configurable).
+- [ ] **RLS isolation (live)** — sign in as two test patients with distinct
+      `nhs_number`s + linked rows; confirm each sees ONLY their own entry.
+- [ ] **Clinical review** — drive a test entry through PENDING_CANCELLATION →
+      `resolve_cancellation` (REINSTATE and CONFIRM); confirm `cancellation_reviews`
+      gets an audit row and `verify_audit_chain('cancellation_reviews')` reports intact.
+- [ ] **Proxy fail-closed** — with no `patient_proxies` row, a second account sees
+      nothing of the first; a non-staff caller of `grant_proxy_access` is rejected.
+
+---
+
+## 7. What this runbook does NOT do (still 👤 Trust sign-off)
+Executing every step above produces a *running, self-verified* system — it does **not**
+make it "compliant." Still required and owned by the Trust:
+- **CSO** sign-off + Hazard Log / Clinical Safety Case Report (DCB0129/0160).
+- **DPIA** completed + signed (special-category data, incl. stored NHS Number).
+- **DSPT** submission; **Caldicott Guardian** approval; **DPO** sign-off.
+- **CREST/CHECK** penetration test; **Cyber Essentials Plus**.
+- Formal independent **WCAG 2.2 AA** audit + assistive-technology testing.
+- **PII encryption at rest** decision (`COMPLIANCE.md` §2).
+- The **staff-tooling UI** + real staff authentication that drives
+  `resolve_cancellation` / `grant_proxy_access`.
+
+Describe the result as **"built to align with [standard], pending [role] sign-off"** —
+never "compliant."
+
+_Drafted 2026-06-01 (engineering runbook). Execution owner: the Trust's deploying engineer._
+````
 
 ---
 

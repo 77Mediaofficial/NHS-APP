@@ -32,6 +32,15 @@ Engineering-controls-only sub-score ≈ 90/100 — the code is in strong shape; 
 almost entirely human/organisational sign-offs + external certifications that only the Trust can
 start. **Do not describe as "compliant" at any score.**
 
+> **Execution status.** All backend SQL is **code-reviewed, not executed** — there is no live database
+> in the dev environment. `DEPLOYMENT.md` is the ordered runbook to stand the system up (Supabase UK
+> region → apply the 11 migrations in order → dashboard settings → deploy → post-deploy checks), and
+> `supabase/tests/verify.sql` is a self-rolling-back assertion harness for the safety-critical logic
+> (NHS-number validation, the clinical-review state machine, hash-chain tamper detection, proxy
+> fail-closed). Running them produces *evidence* for the sign-off roles; it does not itself confer
+> compliance. RLS-as-a-role (authenticated/anon + JWT) is verified by the live post-deploy checks, not
+> by the SQL harness — that boundary is stated in both files.
+
 ## Status legend
 - ✅ Done / control in place
 - ⚠️ Partial — needs work or formal verification
@@ -543,3 +552,19 @@ _Last reviewed: 2026-06-01._
   cannot diverge. JSON validated.
 - Honesty/consistency: updated the old correction-note — `portal/vercel.json` (once hallucinated) now
   legitimately exists. Not executed against a live deploy (header delivery to confirm at deploy time).
+
+**Changelog — 2026-06-01 (execution bridge: DEPLOYMENT.md + verify.sql):**
+- Added `DEPLOYMENT.md` — the ordered runbook from "code-reviewed" to "executed": create Supabase in the
+  **UK region**, apply the **11 migrations in the documented order** (incl. the one expected manual NOTICE on
+  the status-domain prereq), run the verification harness, complete the dashboard settings (admin MFA, NHS Login
+  OIDC provider + claim mapping, region), configure PUBLIC-only env, deploy each surface to Vercel (UK `lhr1`),
+  and a post-deploy checklist (headers, security.txt completeness, auth gating, idle timeout, live RLS isolation,
+  clinical-review + chain-verify, proxy fail-closed). Human-only steps (credentials/settings) flagged as such.
+- Added `supabase/tests/verify.sql` — a single-transaction, **auto-ROLLBACK** assertion harness that directly
+  de-risks "code-reviewed, not executed": asserts the NHS-number validator (valid/invalid check digits
+  independently verified), the `nhs_number` + `status` CHECK constraints, the clinical-review state machine
+  failing **closed** without an identity, the SHA-256 audit chain DETECTING a tamper, and the proxy
+  fail-closed predicate + self-grant CHECK. Honestly scoped: it does NOT test RLS-as-a-role (needs a live JWT;
+  deferred to DEPLOYMENT.md §6).
+- Added an "Execution status" callout under the readiness snapshot so the code-reviewed-vs-executed boundary
+  is unmissable. Still not a compliance claim — running these produces evidence, the Trust assesses it.

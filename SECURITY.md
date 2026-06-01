@@ -6,10 +6,14 @@
 > test and Cyber Essentials Plus — has not been completed (see `COMPLIANCE.md` §6).
 
 ## Reporting a vulnerability
-*(To be completed by the Trust before go-live.)* Provide a monitored security contact
-(email / form) and expected acknowledgement time. Do not disclose vulnerabilities
-publicly before they are resolved. A `SECURITY.txt` should be published at the deploy
-domain (`/.well-known/security.txt`).
+A machine-readable disclosure file (RFC 9116) is provided at
+`frontend/.well-known/security.txt`, served at `/.well-known/security.txt` on the
+deploy domain (with `Content-Type: text/plain` set in `frontend/vercel.json`). It is a
+**template**: the Trust MUST replace every `%%PLACEHOLDER%%` (monitored contact, an
+`Expires` date < 1 year out, the canonical domain, disclosure policy) and ideally
+PGP-clearsign it **before go-live** — a placeholder `security.txt` is worse than none.
+Do not disclose vulnerabilities publicly before they are resolved. For the handling
+process once a report arrives, see `SECURITY-INCIDENT.md` (breach-response runbook).
 
 ## Secure design
 - **Least privilege.** Patients are unauthenticated and never write tables directly;
@@ -55,4 +59,4 @@ domain (`/.well-known/security.txt`).
   dashboard and any operations console).
 - ⚠️ Tamper-evident audit trail; confirm no token↔PII correlation in request logs.
 
-_Last reviewed: 2026-05-29 (engineering self-declaration)._
+_Last reviewed: 2026-06-01 (engineering self-declaration)._

@@ -1,0 +1,52 @@
+# ============================================================================
+# security.txt — vulnerability disclosure contact (RFC 9116)
+# NHS Waitlist Validation
+# ============================================================================
+# This is a TEMPLATE. The Trust MUST replace every %%PLACEHOLDER%% with real,
+# monitored values before deployment, then publish it at:
+#     https://<deploy-domain>/.well-known/security.txt
+#
+# An out-of-date or placeholder security.txt is WORSE than none: complete it or
+# remove it before go-live. Per RFC 9116 it SHOULD be served over HTTPS as
+# text/plain and SHOULD be PGP-clearsigned (see the Signature note at the foot).
+#
+# RFC 9116 treats the entire text after each "Field:" colon as the value, so the
+# example values below are given on their own "#" comment lines, never inline.
+# ----------------------------------------------------------------------------
+
+# REQUIRED — a monitored channel for reports. At least one Contact line.
+#   example: Contact: mailto:security@example.nhs.uk
+Contact: mailto:%%SECURITY_CONTACT_EMAIL%%
+# Optional extra channels (uncomment + complete as appropriate):
+# Contact: https://%%DEPLOY_DOMAIN%%/security-report
+# Contact: tel:%%SECURITY_CONTACT_PHONE%%
+
+# REQUIRED — expiry of this file's data, ISO 8601 (< 1 year out recommended).
+# Refresh on every review so it never goes stale.
+#   example: Expires: 2027-05-31T23:59:59Z
+Expires: %%EXPIRES_ISO8601%%
+
+# Canonical location of this file (where it is authoritatively published).
+#   example: Canonical: https://waitlist.example.nhs.uk/.well-known/security.txt
+Canonical: https://%%DEPLOY_DOMAIN%%/.well-known/security.txt
+
+# Recommended — disclosure policy + the languages you can read reports in.
+Policy: https://%%DEPLOY_DOMAIN%%/security-policy
+Preferred-Languages: en
+
+# Optional — PGP key for encrypted reports, and a public acknowledgements page.
+# Encryption: https://%%DEPLOY_DOMAIN%%/.well-known/pgp-key.txt
+# Acknowledgments: https://%%DEPLOY_DOMAIN%%/security-acknowledgments
+
+# ----------------------------------------------------------------------------
+# NOTE — NHS escalation: in addition to the Trust contact above, report to the
+# Trust's IG / cyber team and, where applicable, the NHS England Data Security
+# Centre national route. Add the correct internal + national contacts here.
+#
+# NOTE — coordinate this file with SECURITY.md (self-declaration) and
+# SECURITY-INCIDENT.md (breach-response runbook) in the repo root.
+#
+# SIGNATURE — RFC 9116 recommends PGP-clearsigning this file with the security
+# contact's key and linking that key via the Encryption field above. Add the
+# signature block before publishing.
+# ============================================================================

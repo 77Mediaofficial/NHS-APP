@@ -9,7 +9,7 @@
 > gitignored `env.js` is excluded and only the `env.example.js` template appears.
 
 
-**33 files** in this bundle.
+**35 files** in this bundle.
 
 
 ## Contents
@@ -20,6 +20,7 @@
 - [`ACCESSIBILITY.md`](#accessibility-md)
 - [`SESSION_LOG_2026-05-29.md`](#session-log-2026-05-29-md)
 - [`COMPLIANCE_CHANGELOG.md`](#compliance-changelog-md)
+- [`frontend/.well-known/security.txt`](#frontend-well-known-security-txt)
 - [`frontend/app.js`](#frontend-app-js)
 - [`frontend/env.example.js`](#frontend-env-example-js)
 - [`frontend/index.html`](#frontend-index-html)
@@ -47,6 +48,7 @@
 - [`tools/build_master.py`](#tools-build-master-py)
 - [`.gitattributes`](#gitattributes)
 - [`.gitignore`](#gitignore)
+- [`SECURITY-INCIDENT.md`](#security-incident-md)
 
 
 ---
@@ -338,7 +340,10 @@ Five-pillar routing (where each pillar is evidenced in this repo):
 - ⚠️👤 **Mandatory MFA** for all admin / remote access (Supabase dashboard + any ops console). Verify + enforce.
 - ⚠️👤 **Software Security Code of Practice (DSIT/NCSC, 2026)** — self-declaration drafted in
   `SECURITY.md` (secure design/build/deploy, pinned deps + SRI, secrets handling, disclosure stub).
-  Pending: independent assurance + Trust completion of the vuln-disclosure contact / `security.txt`.
+  **Disclosure file now drafted in-repo:** `frontend/.well-known/security.txt` (RFC 9116 template,
+  served as `text/plain` via `frontend/vercel.json`) — every `%%PLACEHOLDER%%` (contact, `Expires`,
+  canonical domain, policy) must be completed + ideally PGP-signed by the Trust before go-live.
+  Pending: independent assurance + Trust completion of those contact details.
 - ✅ **Single-use tokens** — atomic burn in `submit_validation_response`.
 - ✅ **Token expiry** — 7-day default in `waitlist_tokens.expires_at`.
 - ✅ **Least privilege** — `anon` has EXECUTE on the RPC only; tables locked by forced RLS.
@@ -361,7 +366,12 @@ Five-pillar routing (where each pillar is evidenced in this repo):
 
 ## 8. DSPT (Data Security & Protection Toolkit) 👤
 - ❌👤 Confirm this app is captured in the Trust's annual DSPT submission.
-- ❌ Incident-response & breach-notification path defined (72-hour ICO clock).
+- ⚠️👤 **Incident-response & breach-notification runbook DRAFTED** (`SECURITY-INCIDENT.md`): triage →
+  contain (evidence-first) → the **72-hour ICO clock** (UK GDPR Art. 33) + Art. 34 patient notification +
+  NHS routes (DSPT incident tool, NHS England Data Security Centre) → eradicate/recover → post-incident
+  review. Names this system's PII surfaces (`nhs_number`, `patient_user_id`, `patient_phone`). Still 👤:
+  the Trust must adopt/own it, fill every `%%PLACEHOLDER%%` (roles + contacts), rehearse it, and integrate
+  it with the major-incident process. **Not** evidence of an operational capability — a drafted aid only.
 
 ## 9. Interoperability — DTAC v2 ⚠️
 - ✅/➖ **NHS Number modulus-11 validation.** *Not applicable in the current patient-facing layer*
@@ -564,6 +574,20 @@ _Last reviewed: 2026-06-01._
   is stored for staff/matching only.
 - Honesty note: code-reviewed, **not** executed (no live Postgres this session) and **not** a compliance claim.
   This is a deliberate, documented increase in the data-protection surface (storing NHS Number) that the DPIA must cover.
+
+**Changelog — 2026-06-01 (vuln-disclosure file + incident-response runbook):**
+- §6 — Added `frontend/.well-known/security.txt` (RFC 9116 vulnerability-disclosure template) and a
+  `Content-Type: text/plain` rule for that path in `frontend/vercel.json` so it serves correctly at
+  `/.well-known/security.txt`. `SECURITY.md` "Reporting a vulnerability" now points at the real file.
+  It is a **template**: the Trust completes every `%%PLACEHOLDER%%` (contact, `Expires`, canonical
+  domain, policy) and ideally PGP-signs it before go-live. Software Security Code of Practice item
+  stays ⚠️👤 (independent assurance + contact completion outstanding).
+- §8 — Added `SECURITY-INCIDENT.md` breach-response runbook (72-hour ICO clock, Art. 34 patient
+  notification, DSPT incident tool + NHS England Data Security Centre routes, evidence-first containment,
+  post-incident review). Incident-response item `❌ → ⚠️👤`. Explicitly **not** an operational capability —
+  the Trust must adopt, staff, rehearse, and own it.
+- Honesty note: both are drafted engineering aids with placeholders, **not** compliance claims. The
+  destructive/credential steps in the runbook are flagged as human-only (no automation performs them).
 ```
 
 ---
@@ -580,10 +604,14 @@ _Last reviewed: 2026-06-01._
 > test and Cyber Essentials Plus — has not been completed (see `COMPLIANCE.md` §6).
 
 ## Reporting a vulnerability
-*(To be completed by the Trust before go-live.)* Provide a monitored security contact
-(email / form) and expected acknowledgement time. Do not disclose vulnerabilities
-publicly before they are resolved. A `SECURITY.txt` should be published at the deploy
-domain (`/.well-known/security.txt`).
+A machine-readable disclosure file (RFC 9116) is provided at
+`frontend/.well-known/security.txt`, served at `/.well-known/security.txt` on the
+deploy domain (with `Content-Type: text/plain` set in `frontend/vercel.json`). It is a
+**template**: the Trust MUST replace every `%%PLACEHOLDER%%` (monitored contact, an
+`Expires` date < 1 year out, the canonical domain, disclosure policy) and ideally
+PGP-clearsign it **before go-live** — a placeholder `security.txt` is worse than none.
+Do not disclose vulnerabilities publicly before they are resolved. For the handling
+process once a report arrives, see `SECURITY-INCIDENT.md` (breach-response runbook).
 
 ## Secure design
 - **Least privilege.** Patients are unauthenticated and never write tables directly;
@@ -629,7 +657,7 @@ domain (`/.well-known/security.txt`).
   dashboard and any operations console).
 - ⚠️ Tamper-evident audit trail; confirm no token↔PII correlation in request logs.
 
-_Last reviewed: 2026-05-29 (engineering self-declaration)._
+_Last reviewed: 2026-06-01 (engineering self-declaration)._
 ```
 
 ---
@@ -869,6 +897,66 @@ response retention period (IG decision).
 
 | Timestamp (UTC) | Tool | File | Scope |
 |---|---|---|---|
+```
+
+---
+
+
+## `frontend/.well-known/security.txt`
+
+```
+# ============================================================================
+# security.txt — vulnerability disclosure contact (RFC 9116)
+# NHS Waitlist Validation
+# ============================================================================
+# This is a TEMPLATE. The Trust MUST replace every %%PLACEHOLDER%% with real,
+# monitored values before deployment, then publish it at:
+#     https://<deploy-domain>/.well-known/security.txt
+#
+# An out-of-date or placeholder security.txt is WORSE than none: complete it or
+# remove it before go-live. Per RFC 9116 it SHOULD be served over HTTPS as
+# text/plain and SHOULD be PGP-clearsigned (see the Signature note at the foot).
+#
+# RFC 9116 treats the entire text after each "Field:" colon as the value, so the
+# example values below are given on their own "#" comment lines, never inline.
+# ----------------------------------------------------------------------------
+
+# REQUIRED — a monitored channel for reports. At least one Contact line.
+#   example: Contact: mailto:security@example.nhs.uk
+Contact: mailto:%%SECURITY_CONTACT_EMAIL%%
+# Optional extra channels (uncomment + complete as appropriate):
+# Contact: https://%%DEPLOY_DOMAIN%%/security-report
+# Contact: tel:%%SECURITY_CONTACT_PHONE%%
+
+# REQUIRED — expiry of this file's data, ISO 8601 (< 1 year out recommended).
+# Refresh on every review so it never goes stale.
+#   example: Expires: 2027-05-31T23:59:59Z
+Expires: %%EXPIRES_ISO8601%%
+
+# Canonical location of this file (where it is authoritatively published).
+#   example: Canonical: https://waitlist.example.nhs.uk/.well-known/security.txt
+Canonical: https://%%DEPLOY_DOMAIN%%/.well-known/security.txt
+
+# Recommended — disclosure policy + the languages you can read reports in.
+Policy: https://%%DEPLOY_DOMAIN%%/security-policy
+Preferred-Languages: en
+
+# Optional — PGP key for encrypted reports, and a public acknowledgements page.
+# Encryption: https://%%DEPLOY_DOMAIN%%/.well-known/pgp-key.txt
+# Acknowledgments: https://%%DEPLOY_DOMAIN%%/security-acknowledgments
+
+# ----------------------------------------------------------------------------
+# NOTE — NHS escalation: in addition to the Trust contact above, report to the
+# Trust's IG / cyber team and, where applicable, the NHS England Data Security
+# Centre national route. Add the correct internal + national contacts here.
+#
+# NOTE — coordinate this file with SECURITY.md (self-declaration) and
+# SECURITY-INCIDENT.md (breach-response runbook) in the repo root.
+#
+# SIGNATURE — RFC 9116 recommends PGP-clearsigning this file with the security
+# contact's key and linking that key via the Encryption field above. Add the
+# signature block before publishing.
+# ============================================================================
 ```
 
 ---
@@ -1525,6 +1613,15 @@ body {
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "headers": [
+    {
+      "source": "/.well-known/security.txt",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/plain; charset=utf-8"
+        }
+      ]
+    },
     {
       "source": "/(.*)",
       "headers": [
@@ -4527,4 +4624,175 @@ desktop.ini
 
 # NOTE: .claude/ IS tracked on purpose so the compliance hook + project config
 # travel to your other machine. settings.local.json contains no secrets here.
+```
+
+---
+
+
+## `SECURITY-INCIDENT.md`
+
+```markdown
+# Security Incident & Personal-Data-Breach Runbook — NHS Waitlist Validation
+
+> **DRAFT runbook, built to align with UK GDPR Art. 33/34, the DSPT incident
+> process, and NHS breach-reporting routes — pending Trust ownership and sign-off
+> (DPO + Caldicott Guardian + SIRO).** This is NOT evidence of an operational
+> incident-response capability. The Trust MUST adopt it, fill every
+> `%%PLACEHOLDER%%`, name the responsible people, rehearse it, and integrate it
+> with the Trust's existing major-incident process before go-live. See
+> `COMPLIANCE.md` §8 (DSPT) and §2 (UK GDPR).
+
+A personal-data breach is *"a breach of security leading to the accidental or
+unlawful destruction, loss, alteration, unauthorised disclosure of, or access to,
+personal data."* It does **not** require malicious intent — a misdirected SMS, an
+over-broad RLS policy, or a lost laptop all count.
+
+---
+
+## 0. Roles (fill in before go-live)
+
+| Role | Name / contact | Responsibility |
+|---|---|---|
+| Incident Lead | `%%INCIDENT_LEAD%%` | Owns the response, declares start/end |
+| Data Protection Officer (DPO) | `%%DPO_CONTACT%%` | Decides on ICO + data-subject notification |
+| Caldicott Guardian | `%%CALDICOTT%%` | Confidentiality / clinical-impact judgement |
+| SIRO (Senior Information Risk Owner) | `%%SIRO%%` | Accountable owner of information risk |
+| Clinical Safety Officer (CSO) | `%%CSO%%` | Assesses patient-safety impact (DCB0129/0160) |
+| Technical responder | `%%TECH_ONCALL%%` | Containment, evidence, remediation |
+| Comms / press | `%%COMMS%%` | External messaging if required |
+
+**The 72-hour clock starts when the Trust becomes **aware** of the breach — not
+when investigation finishes.** Assume awareness = the moment any staff member
+reasonably suspects a breach, and start the timeline immediately.
+
+---
+
+## 1. Triage & severity (first 60 minutes)
+
+1. **Record the clock.** Note the date/time of awareness — this anchors the 72h
+   ICO deadline. Open an incident record (timestamp, who, what was observed).
+2. **Classify.** Is personal/special-category data (health data, NHS Number)
+   involved? This system's sensitive surfaces:
+   - `waitlist_entries.nhs_number` (PII — added for identity matching)
+   - `waitlist_entries.patient_user_id` ↔ auth identity linkage
+   - `sms_dispatch_jobs.patient_phone` (PII — phone numbers)
+   - The patient-facing layers are **PII-free by design** (UUID token only); a
+     breach there is lower-severity unless it correlates a token to an identity.
+3. **Assess risk to individuals** (drives whether you must notify them, Art. 34):
+   likelihood + severity of harm (distress, discrimination, identity exposure,
+   clinical risk if waitlist status is altered).
+4. **Assign severity** `%%SEV_SCALE%%` (e.g. SEV1 confirmed health-data
+   disclosure → SEV4 contained near-miss) and page the roles in §0 accordingly.
+
+---
+
+## 2. Contain (immediately, in parallel with triage)
+
+Do the minimum that stops ongoing exposure without destroying evidence:
+
+- **Revoke / rotate credentials** if a key may be exposed — rotate the Supabase
+  **service-role key** and DB password in the Supabase dashboard, and any Vercel
+  env values. *(Claude/automation must NOT do this — a human performs all
+  credential changes; see the security rules.)*
+- **Disable the leak path.** If an RLS policy or RPC is over-permissive, disable
+  the offending policy/function (a forward-fix migration, not a manual prod edit,
+  where possible) and redeploy.
+- **Burn affected tokens.** `purge_expired_tokens()` exists; for a targeted burn,
+  revoke specific `waitlist_tokens` rows.
+- **Preserve evidence FIRST.** Before deleting anything, capture Supabase logs,
+  request logs, and the relevant DB rows (see §3). Containment ≠ destruction.
+- **Do NOT** permanently delete data, empty trash, or alter access controls as a
+  "fix" — that can destroy evidence and may itself be a notifiable change. Capture,
+  then change forward.
+
+---
+
+## 3. Preserve evidence
+
+- Export relevant **Supabase logs** (Auth, Postgres, Edge) and **Vercel** access
+  logs for the window. Note: confirm whether request logs ever correlate a token
+  with PII (`COMPLIANCE.md` §6 audit-trail item) — if so, that itself is a finding.
+- Snapshot affected rows (`waitlist_entries`, `sms_dispatch_jobs`, `waitlist_tokens`)
+  with timestamps. Record the migration/commit SHA deployed at the time of breach.
+- Keep an append-only incident log (who did what, when). Timeline integrity matters
+  for the ICO and for the post-incident review.
+
+---
+
+## 4. Notify — the deadlines that matter
+
+### a) ICO (Information Commissioner's Office) — within **72 hours** of awareness
+Notify the ICO **unless** the breach is **unlikely to result in a risk** to
+individuals' rights and freedoms (UK GDPR Art. 33(1)). When in doubt, the DPO
+decides; document the reasoning either way.
+- If you cannot gather full details in 72h, submit what you have and supplement
+  later (Art. 33(4) explicitly allows phased reporting). **Do not** wait past 72h
+  to start.
+- ICO breach report: `https://ico.org.uk/for-organisations/report-a-breach/`.
+- Include: nature of breach, categories & approximate number of individuals &
+  records, likely consequences, measures taken/proposed, DPO contact.
+
+### b) Affected individuals (patients) — **without undue delay** (Art. 34)
+Required when the breach is likely to result in a **high risk** to individuals.
+Communicate in clear, plain language: what happened, likely consequences, what
+you're doing, what they can do. Coordinate wording with the DPO + Comms.
+**Sending these communications is a human-authorised action — Claude must not send
+patient notifications.**
+
+### c) NHS-specific routes (run in parallel with the ICO)
+- **DSPT incident reporting tool** — report via the Data Security and Protection
+  Toolkit; for NHS organisations this is the route that also notifies the ICO and
+  NHS England for notifiable incidents. Confirm the Trust's DSPT process owner.
+- **NHS England Data Security Centre** / national cyber route where the incident
+  is a cyber attack. Add the Trust's correct internal escalation here:
+  `%%NHS_ESCALATION%%`.
+- Internal: SIRO, Caldicott Guardian, and (if patient safety could be affected)
+  the **CSO** under the clinical-safety process (DCB0129/0160).
+
+---
+
+## 5. Eradicate & recover
+
+- Deploy the verified fix (forward migration / code change + redeploy). Confirm the
+  leak path is closed in a test before prod.
+- Rotate any remaining exposed secrets; confirm no service-role key reached the
+  client (`SECURITY.md`).
+- Validate RLS isolation after the fix (a signed-in patient still sees only their
+  own row; admin scoped to `hospital_id`).
+- Resume normal operation only when the Incident Lead + DPO agree containment is
+  complete.
+
+---
+
+## 6. Post-incident review (within `%%PIR_DAYS%%` working days)
+
+- Blameless timeline: detection → containment → notification → recovery.
+- Root cause + contributing factors. Did we meet the 72h clock? If not, why?
+- Actions with owners + due dates. Update `COMPLIANCE.md` (§8 status, hazard log if
+  clinical), this runbook, and the DSPT record.
+- Feed any new clinical hazard back into `COMPLIANCE.md` §1.
+
+---
+
+## Quick reference — clocks & contacts
+
+| Item | Value |
+|---|---|
+| ICO deadline | **72 hours** from awareness |
+| ICO report | `https://ico.org.uk/for-organisations/report-a-breach/` |
+| Patient notification | Without undue delay, if **high risk** (Art. 34) |
+| DSPT incident tool | `%%DSPT_INCIDENT_URL%%` |
+| NHS escalation | `%%NHS_ESCALATION%%` |
+| Incident Lead | `%%INCIDENT_LEAD%%` |
+| DPO | `%%DPO_CONTACT%%` |
+
+---
+
+## What this runbook is NOT
+- **Not** proof of an operational incident-response capability — that requires the
+  Trust to own, staff, rehearse, and integrate it with the major-incident process.
+- **Not** legal advice — the DPO/legal team make the notification calls.
+- **Not** a substitute for the DSPT submission (`COMPLIANCE.md` §8) or the DPIA (§2).
+
+_Drafted 2026-06-01 (engineering aid). Owner before go-live: `%%RUNBOOK_OWNER%%` (DPO/SIRO)._
 ```

@@ -156,7 +156,10 @@ Five-pillar routing (where each pillar is evidenced in this repo):
 - ⚠️👤 **Mandatory MFA** for all admin / remote access (Supabase dashboard + any ops console). Verify + enforce.
 - ⚠️👤 **Software Security Code of Practice (DSIT/NCSC, 2026)** — self-declaration drafted in
   `SECURITY.md` (secure design/build/deploy, pinned deps + SRI, secrets handling, disclosure stub).
-  Pending: independent assurance + Trust completion of the vuln-disclosure contact / `security.txt`.
+  **Disclosure file now drafted in-repo:** `frontend/.well-known/security.txt` (RFC 9116 template,
+  served as `text/plain` via `frontend/vercel.json`) — every `%%PLACEHOLDER%%` (contact, `Expires`,
+  canonical domain, policy) must be completed + ideally PGP-signed by the Trust before go-live.
+  Pending: independent assurance + Trust completion of those contact details.
 - ✅ **Single-use tokens** — atomic burn in `submit_validation_response`.
 - ✅ **Token expiry** — 7-day default in `waitlist_tokens.expires_at`.
 - ✅ **Least privilege** — `anon` has EXECUTE on the RPC only; tables locked by forced RLS.
@@ -179,7 +182,12 @@ Five-pillar routing (where each pillar is evidenced in this repo):
 
 ## 8. DSPT (Data Security & Protection Toolkit) 👤
 - ❌👤 Confirm this app is captured in the Trust's annual DSPT submission.
-- ❌ Incident-response & breach-notification path defined (72-hour ICO clock).
+- ⚠️👤 **Incident-response & breach-notification runbook DRAFTED** (`SECURITY-INCIDENT.md`): triage →
+  contain (evidence-first) → the **72-hour ICO clock** (UK GDPR Art. 33) + Art. 34 patient notification +
+  NHS routes (DSPT incident tool, NHS England Data Security Centre) → eradicate/recover → post-incident
+  review. Names this system's PII surfaces (`nhs_number`, `patient_user_id`, `patient_phone`). Still 👤:
+  the Trust must adopt/own it, fill every `%%PLACEHOLDER%%` (roles + contacts), rehearse it, and integrate
+  it with the major-incident process. **Not** evidence of an operational capability — a drafted aid only.
 
 ## 9. Interoperability — DTAC v2 ⚠️
 - ✅/➖ **NHS Number modulus-11 validation.** *Not applicable in the current patient-facing layer*
@@ -382,3 +390,17 @@ _Last reviewed: 2026-06-01._
   is stored for staff/matching only.
 - Honesty note: code-reviewed, **not** executed (no live Postgres this session) and **not** a compliance claim.
   This is a deliberate, documented increase in the data-protection surface (storing NHS Number) that the DPIA must cover.
+
+**Changelog — 2026-06-01 (vuln-disclosure file + incident-response runbook):**
+- §6 — Added `frontend/.well-known/security.txt` (RFC 9116 vulnerability-disclosure template) and a
+  `Content-Type: text/plain` rule for that path in `frontend/vercel.json` so it serves correctly at
+  `/.well-known/security.txt`. `SECURITY.md` "Reporting a vulnerability" now points at the real file.
+  It is a **template**: the Trust completes every `%%PLACEHOLDER%%` (contact, `Expires`, canonical
+  domain, policy) and ideally PGP-signs it before go-live. Software Security Code of Practice item
+  stays ⚠️👤 (independent assurance + contact completion outstanding).
+- §8 — Added `SECURITY-INCIDENT.md` breach-response runbook (72-hour ICO clock, Art. 34 patient
+  notification, DSPT incident tool + NHS England Data Security Centre routes, evidence-first containment,
+  post-incident review). Incident-response item `❌ → ⚠️👤`. Explicitly **not** an operational capability —
+  the Trust must adopt, staff, rehearse, and own it.
+- Honesty note: both are drafted engineering aids with placeholders, **not** compliance claims. The
+  destructive/credential steps in the runbook are flagged as human-only (no automation performs them).

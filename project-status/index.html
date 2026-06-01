@@ -118,6 +118,16 @@
     <p class="sub">Patient-facing waitlist validation app — Vercel-ready static frontend wired to a hardened Supabase token + RPC backend. Built to <em>align with</em> NHS standards; go-live requires Trust sign-off.</p>
   </header>
 
+  <div class="note" style="background:#fff4d6;border-color:#e7c200;border-left-color:#b38f00">
+    <b>⚠ This dashboard is a historical snapshot (29 May 2026) and is partially superseded.</b>
+    Since it was written the project added the <b>base schema migration</b> (it IS now in the repo),
+    the authenticated <b>Patient Hub portal</b> and <b>Staff Console</b>, the identity-matcher,
+    clinical-review workflow, tamper-evident audit chains, and the proxy scaffold (11 migrations total).
+    For the current, authoritative status always use <code>COMPLIANCE.md</code> (single source of truth)
+    and <code>DEPLOYMENT.md</code> for the execution runbook. The scores below remain broadly accurate
+    (DTAC ≈ 44/100; engineering ≈ 90+/100) because the ceiling is unchanged — Trust sign-offs.
+  </div>
+
   <div class="note">
     <b>This is an engineering status page, not a certification.</b> The system must not be described as
     “compliant”. Go-live legally requires the Trust’s Clinical Safety Officer (DCB0129/0160), Data Protection
@@ -126,12 +136,13 @@
   </div>
 
   <div class="note" style="background:var(--pend-bg);border-color:#e7b9a6;border-left-color:var(--pend)">
-    <b>Backend not provisioned yet.</b> There is no Supabase project for this app. The only projects on the
-    account (77MEDIAOFFICIAL) are unrelated and in <b>eu-west-1 (Ireland)</b>. Before anything can be applied
-    or deployed: (1) create a Supabase project in <b>London — eu-west-2</b> (UK residency, §7; can't be changed
-    later); (2) scaffold the <b>base schema</b> (<code>waitlist_entries</code>, <code>hospitals</code>,
-    <code>auth.current_hospital_id()</code>, <code>sms_dispatch_jobs</code>) — it is assumed upstream and is
-    <b>not in this repo</b>, so our migrations can't apply to an empty project until it exists.
+    <b>Backend not provisioned yet (but all SQL is now in the repo).</b> There is still no Supabase project for
+    this app. <b>Correction to the original note:</b> the base schema is <b>no longer assumed upstream</b> — it is
+    now in the repo as <code>20260527000000_base_schema.sql</code> (<code>waitlist_entries</code>,
+    <code>hospitals</code>, <code>auth.current_hospital_id()</code>, <code>sms_dispatch_jobs</code>), first of
+    <b>11 migrations</b>. To go live: (1) create a Supabase project in <b>London — eu-west-2</b> (UK residency,
+    §7; can't be changed later); (2) apply the 11 migrations in order and run <code>supabase/tests/verify.sql</code>
+    — full steps in <code>DEPLOYMENT.md</code>. All backend SQL is <b>code-reviewed, not executed</b>.
   </div>
 
   <div class="meters">
@@ -139,7 +150,7 @@
       <h4>Engineering build</h4>
       <div class="big" style="color:var(--done)">≈ 90<span style="font-size:1rem;color:var(--faint)">/100</span></div>
       <div class="meter"><div class="meter__fill fill-eng"></div></div>
-      <p>All <em>code</em> closeable without the Trust is done (retention/erasure, NHS-number validator, token generator, accessibility pass, secure-SDLC declaration). Not yet provisioned: no Supabase project + base schema still to scaffold.</p>
+      <p>All <em>code</em> closeable without the Trust is done — incl. base schema, identity matching, clinical-review workflow, tamper-evident audit chains, proxy scaffold, two authenticated surfaces (portal + staff), and the deploy/verify runbooks. Not yet provisioned: no live Supabase project (all SQL code-reviewed, not executed).</p>
     </div>
     <div class="meter-card">
       <h4>DTAC v2 submission readiness</h4>
@@ -307,9 +318,9 @@
   <div class="next">
     <ul>
       <li><span class="num h">①</span><div><b>(You) Create the Supabase project — London `eu-west-2`.</b> Not set up yet. Region is permanent and must be UK for §7. Share only the public Project URL + anon key; never the service-role key or DB password.</div></li>
-      <li><span class="num">②</span><div><b>(Code, ready when you are) Scaffold the base schema</b> — <code>waitlist_entries</code>, <code>hospitals</code>, <code>auth.current_hospital_id()</code>, <code>sms_dispatch_jobs</code> + <code>get_next_sms_batch</code>. Not in repo today; required before our migrations apply.</div></li>
+      <li><span class="num">②</span><div><b>(Done in repo) Base schema</b> — <code>20260527000000_base_schema.sql</code> (<code>waitlist_entries</code>, <code>hospitals</code>, <code>auth.current_hospital_id()</code>, <code>sms_dispatch_jobs</code> + <code>get_next_sms_batch</code>) is committed as the first of 11 migrations. No longer "assumed upstream".</div></li>
       <li><span class="num">③</span><div><b>Config</b> — write <code>frontend/env.js</code> from <code>env.example.js</code> with the public URL + anon key (mechanism built).</div></li>
-      <li><span class="num">④</span><div><b>Apply migrations</b> — <code>supabase db push</code>: base schema → status-domain prereq → section-11 → retention/erasure → NHS-number → token generator. Re-read the status-domain NOTICE to confirm the domain widened.</div></li>
+      <li><span class="num">④</span><div><b>Apply migrations + verify</b> — <code>supabase db push</code> applies all <b>11</b> in order (base schema → status-domain prereq → section-11 → retention/erasure → NHS-number → token generator → portal RLS → identity matching → clinical-review → audit hash chain → proxy scaffold), then run <code>supabase/tests/verify.sql</code>. Full annotated steps in <code>DEPLOYMENT.md</code>.</div></li>
       <li><span class="num">⑤</span><div><b>Issue links + enqueue</b> — <code>issue_validation_token()</code> per patient → populate <code>sms_dispatch_jobs.payload_link</code>.</div></li>
       <li><span class="num h">⑥</span><div><b>Deploy to Vercel — gated.</b> Ship <code>frontend/</code> static once the clinical/IG sign-offs below are in place. Do not take a patient-facing clinical service live pre-sign-off.</div></li>
       <li><span class="num h">A</span><div><b>Clinical Safety Officer</b> — assign + open Hazard Log &amp; Clinical Safety Case Report; own the <code>PENDING_CANCELLATION</code> → cancel/reinstate review workflow.</div></li>

@@ -219,7 +219,14 @@ Five-pillar routing (where each pillar is evidenced in this repo):
   skip link, `:focus-visible`, `role="status"`/`alert`, progressive disclosure, reduced-motion, light/dark.
   Still ❌ formal audit + AT testing (shared with §5).
 - ⚠️ **DPIA scope.** Patient-facing authenticated access to health data must be covered by the §2 DPIA.
-- ❌ **Session hygiene for shared/elderly devices** — define idle-timeout / explicit sign-out guidance.
+- ✅ **Session hygiene for shared/elderly devices — idle auto sign-out built + live-verified.** After
+  `IDLE_TIMEOUT_MINUTES` (default 10; `window.__ENV`-configurable) of no interaction the portal shows an
+  accessible warning (`role="alertdialog"`, live countdown, focus moved to "Stay signed in"), then signs the
+  patient out and shows a security notice on the login screen — so a health record is never left open on an
+  unattended/shared device. Any interaction (pointer/key/touch/scroll, throttled) or "Stay signed in" cancels +
+  re-arms; an explicit "Sign out" remains in the dash bar. Verified live in preview (warn at 50% of limit →
+  auto sign-out + notice; "Stay signed in" cancels the logout past the original deadline). `portal/app.js`
+  (`armIdleTimers`/`showIdleWarning`/`performSignOut`), `portal/index.html` (`#idleWarning`), `portal/styles.css` (`.idle`).
 - *Interactive login→dashboard click-through to be verified in the repo-rooted session (preview "portal", :5700).*
 
 ---
@@ -236,7 +243,7 @@ Five-pillar routing (where each pillar is evidenced in this repo):
 3. Does it move, log, or expose any PII? → re-check §2, §3, §6, §7.
 4. Update the status markers here in the same commit.
 
-_Last reviewed: 2026-05-29._
+_Last reviewed: 2026-05-31._
 
 **Changelog — 2026-05-29 (NHS guideline back-check):**
 - §1 — Mitigated the instant-irreversible auto-cancel hazard: added a frontend confirmation gate
@@ -317,6 +324,27 @@ _Last reviewed: 2026-05-29._
 - Clinical-safety flow (DCB0129/0160) unchanged and intact — restyle only; confirmation gate + reversible
   soft-state behaviour preserved. `frontend/index.html`: `color-scheme: light`, `styles.css?v=20260530` cache-bust.
 - Caveat unchanged: NHS-palette ≠ NHS-accredited; logo is a placeholder; formal WCAG audit + AT testing still ❌.
-- Correction note: an earlier draft this session referenced two files (`20260529070000_patient_portal_rls.sql`,
-  `portal/vercel.json`) that **do not exist** — those were hallucinated and never committed; no false claim
-  landed in the repo (verified: 29 tracked files, working tree clean).
+- Correction note: an earlier (2026-05-30) draft referenced two files (`20260529070000_patient_portal_rls.sql`,
+  `portal/vercel.json`) that did not exist at the time — those changelog lines were premature/hallucinated, and
+  no false claim landed in the committed repo (caught pre-commit). **Update 2026-05-31:**
+  `20260529070000_patient_portal_rls.sql` was subsequently authored for real and is now committed (see §10
+  patient-SELECT RLS policy); `portal/vercel.json` still does **not** exist.
+
+**Changelog — 2026-05-31 (portal idle auto sign-out — §10 session hygiene closed):**
+- §10 — Built idle-timeout auto sign-out for the authenticated portal (shared/elderly-device safety; also
+  supports §6 technical security + §2 data protection). After `IDLE_TIMEOUT_MINUTES` (default 10,
+  `window.__ENV`-configurable; dev-mock `?idle=<min>` for testing) of no interaction: an accessible
+  `role="alertdialog"` warning with a live 1-second countdown appears at 50% of the limit (capped 60s) and
+  focus moves to "Stay signed in"; on expiry the patient is signed out (Supabase `auth.signOut()` when
+  configured), the dashboard is hidden, and a security notice appears on the login screen. Any interaction
+  (pointerdown/keydown/touchstart/scroll, throttled) or "Stay signed in" cancels + re-arms; an explicit
+  "Sign out" stays in the dash bar. Status `❌ → ✅`.
+- Files: `portal/app.js` (idle config + `armIdleTimers`/`showIdleWarning`/`onUserActivity`/`performSignOut`/
+  `clearIdleTimers`/`hideIdleWarning`/`isSignedIn`; `route()` arms on session, clears on sign-out),
+  `portal/index.html` (`#idleWarning` alertdialog markup; cache-bust `app.js?v=20260531` + `styles.css?v=20260531`),
+  `portal/styles.css` (`.idle` panel — NHS-blue accent, reduced-motion-safe).
+- Verified live (preview, `?demo=1&idle=0.05`): t0 dashboard armed → t≈1.9s warning + countdown + focus on
+  "Stay signed in" → t≈3.5s signed out + login notice; separately "Stay signed in" kept the patient signed in
+  past the original logout deadline. `node --check portal/app.js` OK.
+- Honesty note: a built + live-verified control, **not** a compliance claim. Portal go-live still needs the
+  §10 👤 items (real NHS Login OIDC, identity-matching) + Trust sign-offs (DPO/Caldicott/CSO).

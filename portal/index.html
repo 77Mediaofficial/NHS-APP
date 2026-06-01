@@ -14,7 +14,7 @@
         content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" />
 
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-  <link rel="stylesheet" href="styles.css?v=20260530" />
+  <link rel="stylesheet" href="styles.css?v=20260531" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to main content</a>
@@ -106,6 +106,23 @@
       <!-- Proxy banner (hidden unless proxy view is on) -->
       <p id="proxyBanner" class="proxy-banner" role="status" hidden></p>
 
+      <!-- Idle session warning (shared/elderly-device safety). After a period of
+           no interaction we warn, then sign the patient out so their health record
+           is never left open on an unattended/shared device. "Stay signed in"
+           cancels; any interaction also cancels. -->
+      <div id="idleWarning" class="idle" role="alertdialog"
+           aria-labelledby="idleTitle" aria-describedby="idleDesc" hidden>
+        <h2 class="idle__title" id="idleTitle">Are you still there?</h2>
+        <p class="idle__text" id="idleDesc">
+          To keep your information safe we’ll sign you out soon.
+          <span id="idleCountdown"></span>
+        </p>
+        <div class="idle__actions">
+          <button class="btn btn--primary" id="idleStay" type="button">Stay signed in</button>
+          <button class="btn btn--ghost" id="idleSignOutNow" type="button">Sign out now</button>
+        </div>
+      </div>
+
       <h1 id="greeting" class="dash__greeting">Hello.</h1>
 
       <!-- PRIMARY: Waitlist status -->
@@ -169,6 +186,6 @@
     referrerpolicy="no-referrer"></script>
   <!-- Runtime config: PUBLIC url + anon key only (env.js is gitignored; see env.example.js). -->
   <script src="env.js"></script>
-  <script src="app.js?v=20260529b" defer></script>
+  <script src="app.js?v=20260531" defer></script>
 </body>
 </html>

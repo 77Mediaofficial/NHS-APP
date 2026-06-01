@@ -400,7 +400,14 @@ Five-pillar routing (where each pillar is evidenced in this repo):
   skip link, `:focus-visible`, `role="status"`/`alert`, progressive disclosure, reduced-motion, light/dark.
   Still ❌ formal audit + AT testing (shared with §5).
 - ⚠️ **DPIA scope.** Patient-facing authenticated access to health data must be covered by the §2 DPIA.
-- ❌ **Session hygiene for shared/elderly devices** — define idle-timeout / explicit sign-out guidance.
+- ✅ **Session hygiene for shared/elderly devices — idle auto sign-out built + live-verified.** After
+  `IDLE_TIMEOUT_MINUTES` (default 10; `window.__ENV`-configurable) of no interaction the portal shows an
+  accessible warning (`role="alertdialog"`, live countdown, focus moved to "Stay signed in"), then signs the
+  patient out and shows a security notice on the login screen — so a health record is never left open on an
+  unattended/shared device. Any interaction (pointer/key/touch/scroll, throttled) or "Stay signed in" cancels +
+  re-arms; an explicit "Sign out" remains in the dash bar. Verified live in preview (warn at 50% of limit →
+  auto sign-out + notice; "Stay signed in" cancels the logout past the original deadline). `portal/app.js`
+  (`armIdleTimers`/`showIdleWarning`/`performSignOut`), `portal/index.html` (`#idleWarning`), `portal/styles.css` (`.idle`).
 - *Interactive login→dashboard click-through to be verified in the repo-rooted session (preview "portal", :5700).*
 
 ---
@@ -417,7 +424,7 @@ Five-pillar routing (where each pillar is evidenced in this repo):
 3. Does it move, log, or expose any PII? → re-check §2, §3, §6, §7.
 4. Update the status markers here in the same commit.
 
-_Last reviewed: 2026-05-29._
+_Last reviewed: 2026-05-31._
 
 **Changelog — 2026-05-29 (NHS guideline back-check):**
 - §1 — Mitigated the instant-irreversible auto-cancel hazard: added a frontend confirmation gate
@@ -498,9 +505,30 @@ _Last reviewed: 2026-05-29._
 - Clinical-safety flow (DCB0129/0160) unchanged and intact — restyle only; confirmation gate + reversible
   soft-state behaviour preserved. `frontend/index.html`: `color-scheme: light`, `styles.css?v=20260530` cache-bust.
 - Caveat unchanged: NHS-palette ≠ NHS-accredited; logo is a placeholder; formal WCAG audit + AT testing still ❌.
-- Correction note: an earlier draft this session referenced two files (`20260529070000_patient_portal_rls.sql`,
-  `portal/vercel.json`) that **do not exist** — those were hallucinated and never committed; no false claim
-  landed in the repo (verified: 29 tracked files, working tree clean).
+- Correction note: an earlier (2026-05-30) draft referenced two files (`20260529070000_patient_portal_rls.sql`,
+  `portal/vercel.json`) that did not exist at the time — those changelog lines were premature/hallucinated, and
+  no false claim landed in the committed repo (caught pre-commit). **Update 2026-05-31:**
+  `20260529070000_patient_portal_rls.sql` was subsequently authored for real and is now committed (see §10
+  patient-SELECT RLS policy); `portal/vercel.json` still does **not** exist.
+
+**Changelog — 2026-05-31 (portal idle auto sign-out — §10 session hygiene closed):**
+- §10 — Built idle-timeout auto sign-out for the authenticated portal (shared/elderly-device safety; also
+  supports §6 technical security + §2 data protection). After `IDLE_TIMEOUT_MINUTES` (default 10,
+  `window.__ENV`-configurable; dev-mock `?idle=<min>` for testing) of no interaction: an accessible
+  `role="alertdialog"` warning with a live 1-second countdown appears at 50% of the limit (capped 60s) and
+  focus moves to "Stay signed in"; on expiry the patient is signed out (Supabase `auth.signOut()` when
+  configured), the dashboard is hidden, and a security notice appears on the login screen. Any interaction
+  (pointerdown/keydown/touchstart/scroll, throttled) or "Stay signed in" cancels + re-arms; an explicit
+  "Sign out" stays in the dash bar. Status `❌ → ✅`.
+- Files: `portal/app.js` (idle config + `armIdleTimers`/`showIdleWarning`/`onUserActivity`/`performSignOut`/
+  `clearIdleTimers`/`hideIdleWarning`/`isSignedIn`; `route()` arms on session, clears on sign-out),
+  `portal/index.html` (`#idleWarning` alertdialog markup; cache-bust `app.js?v=20260531` + `styles.css?v=20260531`),
+  `portal/styles.css` (`.idle` panel — NHS-blue accent, reduced-motion-safe).
+- Verified live (preview, `?demo=1&idle=0.05`): t0 dashboard armed → t≈1.9s warning + countdown + focus on
+  "Stay signed in" → t≈3.5s signed out + login notice; separately "Stay signed in" kept the patient signed in
+  past the original logout deadline. `node --check portal/app.js` OK.
+- Honesty note: a built + live-verified control, **not** a compliance claim. Portal go-live still needs the
+  §10 👤 items (real NHS Login OIDC, identity-matching) + Trust sign-offs (DPO/Caldicott/CSO).
 ```
 
 ---
@@ -1545,6 +1573,23 @@ body {
   // No backend configured → local preview mode (mock session, sample data).
   const devMock = !db;
 
+  // ---- Session hygiene: idle auto sign-out config -------------------------
+  // Patient health data must not stay open on an unattended/shared device. After
+  // IDLE_LIMIT_MS of no interaction we warn, then sign the patient out. Configurable
+  // via window.__ENV.IDLE_TIMEOUT_MINUTES (default 10). In dev-mock ONLY, ?idle=<minutes>
+  // overrides it for quick testing (e.g. ?idle=0.05 ≈ 3s). The warning appears
+  // IDLE_WARN_MS before logout so slow readers get an explicit chance to stay.
+  let _idleMin = Number(window.__ENV?.IDLE_TIMEOUT_MINUTES) || 10;
+  if (devMock) {
+    const _q = new URLSearchParams(location.search).get("idle");
+    if (_q && Number(_q) > 0) _idleMin = Number(_q);
+  }
+  const IDLE_LIMIT_MS = Math.max(1000, _idleMin * 60 * 1000);
+  const IDLE_WARN_MS = Math.min(60000, Math.floor(IDLE_LIMIT_MS / 2));
+  const IDLE_NOTICE = "For your security, you were signed out after a period of inactivity. Please sign in again.";
+  let idleTimer = null, warnTimer = null, countdownInt = null, lastActivity = 0;
+  let pendingLoginNotice = "";
+
   // ---- Elements -----------------------------------------------------------
   const els = {
     login:       document.getElementById("login"),
@@ -1565,6 +1610,10 @@ body {
     wlReferred:  document.getElementById("wlReferred"),
     wlHospital:  document.getElementById("wlHospital"),
     dashError:   document.getElementById("dashError"),
+    idleWarning: document.getElementById("idleWarning"),
+    idleStay:    document.getElementById("idleStay"),
+    idleSignOutNow: document.getElementById("idleSignOutNow"),
+    idleCountdown:  document.getElementById("idleCountdown"),
   };
 
   // ---- Small helpers ------------------------------------------------------
@@ -1589,7 +1638,9 @@ body {
   function showLoginView() {
     hide(els.dashboard);
     show(els.login);
-    setError(els.loginError, "");
+    // Preserve any pending notice (e.g. "signed out due to inactivity"); it is
+    // cleared when the patient starts interacting with the login screen.
+    setError(els.loginError, pendingLoginNotice || "");
     if (els.nhsLogin) els.nhsLogin.focus();
   }
   function showDashboardView() {
@@ -1666,9 +1717,71 @@ body {
     if (session && session.user) {
       showDashboardView();
       hydrate(session.user);
+      armIdleTimers();
     } else {
+      clearIdleTimers();
+      hideIdleWarning();
       showLoginView();
     }
+  }
+
+  // ---- Session hygiene: idle auto sign-out --------------------------------
+  function isSignedIn() { return els.dashboard && !els.dashboard.hidden; }
+
+  function clearIdleTimers() {
+    if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+    if (warnTimer) { clearTimeout(warnTimer); warnTimer = null; }
+    if (countdownInt) { clearInterval(countdownInt); countdownInt = null; }
+  }
+
+  function hideIdleWarning() {
+    if (countdownInt) { clearInterval(countdownInt); countdownInt = null; }
+    hide(els.idleWarning);
+  }
+
+  function armIdleTimers() {
+    clearIdleTimers();
+    hide(els.idleWarning);
+    if (!isSignedIn()) return;
+    warnTimer = setTimeout(showIdleWarning, Math.max(0, IDLE_LIMIT_MS - IDLE_WARN_MS));
+    idleTimer = setTimeout(function () { performSignOut(IDLE_NOTICE); }, IDLE_LIMIT_MS);
+  }
+
+  function showIdleWarning() {
+    if (!isSignedIn()) return;
+    const logoutAt = Date.now() + IDLE_WARN_MS;
+    const tick = function () {
+      const secs = Math.max(0, Math.round((logoutAt - Date.now()) / 1000));
+      if (els.idleCountdown) {
+        els.idleCountdown.textContent =
+          "Signing out in " + secs + " second" + (secs === 1 ? "" : "s") + ".";
+      }
+    };
+    tick();
+    if (countdownInt) clearInterval(countdownInt);
+    countdownInt = setInterval(tick, 1000);
+    show(els.idleWarning);
+    if (els.idleStay) els.idleStay.focus();
+  }
+
+  function onUserActivity() {
+    if (!isSignedIn()) return;
+    const warningUp = els.idleWarning && !els.idleWarning.hidden;
+    const now = Date.now();
+    // Throttle re-arming during normal use; but always respond while the warning is up.
+    if (!warningUp && now - lastActivity < 1000) return;
+    lastActivity = now;
+    armIdleTimers();
+  }
+
+  async function performSignOut(notice) {
+    pendingLoginNotice = notice || "";
+    clearIdleTimers();
+    hideIdleWarning();
+    if (db) { try { await db.auth.signOut(); } catch (_) {} }
+    if (els.devSignin) hide(els.devSignin);
+    if (els.nhsLogin) show(els.nhsLogin);
+    route(null);
   }
 
   // ---- Auth lifecycle -----------------------------------------------------
@@ -1694,6 +1807,8 @@ body {
   // Here it reveals the mock credential form (no creds are stored in the repo).
   if (els.nhsLogin) {
     els.nhsLogin.addEventListener("click", () => {
+      pendingLoginNotice = "";
+      setError(els.loginError, "");
       hide(els.nhsLogin);
       show(els.devSignin);
       if (els.devEmail) els.devEmail.focus();
@@ -1703,6 +1818,7 @@ body {
   if (els.devSignin) {
     els.devSignin.addEventListener("submit", async (e) => {
       e.preventDefault();
+      pendingLoginNotice = "";
       setError(els.loginError, "");
       const email = (els.devEmail.value || "").trim();
       const password = els.devPassword.value || "";
@@ -1733,14 +1849,20 @@ body {
 
   // ---- Sign out -----------------------------------------------------------
   if (els.signOut) {
-    els.signOut.addEventListener("click", async () => {
-      if (db) { try { await db.auth.signOut(); } catch (_) {} }
-      // Reset mock form state and route to login.
-      if (els.devSignin) hide(els.devSignin);
-      if (els.nhsLogin) show(els.nhsLogin);
-      route(null);
-    });
+    els.signOut.addEventListener("click", () => performSignOut(""));
   }
+
+  // ---- Idle-warning controls ----------------------------------------------
+  if (els.idleStay) {
+    els.idleStay.addEventListener("click", () => armIdleTimers());
+  }
+  if (els.idleSignOutNow) {
+    els.idleSignOutNow.addEventListener("click", () => performSignOut(""));
+  }
+
+  // Any interaction resets the idle timer (no-op when signed out).
+  ["pointerdown", "keydown", "touchstart", "scroll"].forEach((evt) =>
+    window.addEventListener(evt, onUserActivity, { passive: true }));
 
   // ---- Proxy view (MOCK) --------------------------------------------------
   // Real proxy access requires a verified proxy relationship + its own RLS and
@@ -1805,7 +1927,7 @@ window.__ENV = {
         content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" />
 
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-  <link rel="stylesheet" href="styles.css?v=20260530" />
+  <link rel="stylesheet" href="styles.css?v=20260531" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to main content</a>
@@ -1897,6 +2019,23 @@ window.__ENV = {
       <!-- Proxy banner (hidden unless proxy view is on) -->
       <p id="proxyBanner" class="proxy-banner" role="status" hidden></p>
 
+      <!-- Idle session warning (shared/elderly-device safety). After a period of
+           no interaction we warn, then sign the patient out so their health record
+           is never left open on an unattended/shared device. "Stay signed in"
+           cancels; any interaction also cancels. -->
+      <div id="idleWarning" class="idle" role="alertdialog"
+           aria-labelledby="idleTitle" aria-describedby="idleDesc" hidden>
+        <h2 class="idle__title" id="idleTitle">Are you still there?</h2>
+        <p class="idle__text" id="idleDesc">
+          To keep your information safe we’ll sign you out soon.
+          <span id="idleCountdown"></span>
+        </p>
+        <div class="idle__actions">
+          <button class="btn btn--primary" id="idleStay" type="button">Stay signed in</button>
+          <button class="btn btn--ghost" id="idleSignOutNow" type="button">Sign out now</button>
+        </div>
+      </div>
+
       <h1 id="greeting" class="dash__greeting">Hello.</h1>
 
       <!-- PRIMARY: Waitlist status -->
@@ -1960,7 +2099,7 @@ window.__ENV = {
     referrerpolicy="no-referrer"></script>
   <!-- Runtime config: PUBLIC url + anon key only (env.js is gitignored; see env.example.js). -->
   <script src="env.js"></script>
-  <script src="app.js?v=20260529b" defer></script>
+  <script src="app.js?v=20260531" defer></script>
 </body>
 </html>
 ```
@@ -2197,6 +2336,18 @@ body {
   color: var(--nhs-black); background: #eef4fb;            /* pale blue tint */
   border-left: 4px solid var(--nhs-blue);
 }
+
+/* ---- Idle session warning (shared/elderly-device safety) --------------- */
+.idle {
+  background: var(--surface); border-radius: var(--radius);
+  box-shadow: var(--shadow-lift); padding: clamp(18px, 5vw, 26px);
+  border-left: 6px solid var(--nhs-blue);
+  animation: rise .25s var(--ease) both;
+}
+.idle__title { font-size: 1.25rem; font-weight: 700; letter-spacing: -.01em; margin-bottom: 6px; }
+.idle__text  { color: var(--ink-soft); margin-bottom: 18px; }
+.idle__actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.idle__actions .btn { width: auto; flex: 1 1 auto; }
 
 /* ---- Panels (white cards, soft depth) --------------------------------- */
 .panel {

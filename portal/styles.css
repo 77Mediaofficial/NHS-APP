@@ -225,6 +225,18 @@ body {
   border-left: 4px solid var(--nhs-blue);
 }
 
+/* ---- Idle session warning (shared/elderly-device safety) --------------- */
+.idle {
+  background: var(--surface); border-radius: var(--radius);
+  box-shadow: var(--shadow-lift); padding: clamp(18px, 5vw, 26px);
+  border-left: 6px solid var(--nhs-blue);
+  animation: rise .25s var(--ease) both;
+}
+.idle__title { font-size: 1.25rem; font-weight: 700; letter-spacing: -.01em; margin-bottom: 6px; }
+.idle__text  { color: var(--ink-soft); margin-bottom: 18px; }
+.idle__actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.idle__actions .btn { width: auto; flex: 1 1 auto; }
+
 /* ---- Panels (white cards, soft depth) --------------------------------- */
 .panel {
   background: var(--surface); border-radius: var(--radius);

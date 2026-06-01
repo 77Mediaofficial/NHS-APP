@@ -34,6 +34,23 @@
   // No backend configured → local preview mode (mock session, sample data).
   const devMock = !db;
 
+  // ---- Session hygiene: idle auto sign-out config -------------------------
+  // Patient health data must not stay open on an unattended/shared device. After
+  // IDLE_LIMIT_MS of no interaction we warn, then sign the patient out. Configurable
+  // via window.__ENV.IDLE_TIMEOUT_MINUTES (default 10). In dev-mock ONLY, ?idle=<minutes>
+  // overrides it for quick testing (e.g. ?idle=0.05 ≈ 3s). The warning appears
+  // IDLE_WARN_MS before logout so slow readers get an explicit chance to stay.
+  let _idleMin = Number(window.__ENV?.IDLE_TIMEOUT_MINUTES) || 10;
+  if (devMock) {
+    const _q = new URLSearchParams(location.search).get("idle");
+    if (_q && Number(_q) > 0) _idleMin = Number(_q);
+  }
+  const IDLE_LIMIT_MS = Math.max(1000, _idleMin * 60 * 1000);
+  const IDLE_WARN_MS = Math.min(60000, Math.floor(IDLE_LIMIT_MS / 2));
+  const IDLE_NOTICE = "For your security, you were signed out after a period of inactivity. Please sign in again.";
+  let idleTimer = null, warnTimer = null, countdownInt = null, lastActivity = 0;
+  let pendingLoginNotice = "";
+
   // ---- Elements -----------------------------------------------------------
   const els = {
     login:       document.getElementById("login"),
@@ -54,6 +71,10 @@
     wlReferred:  document.getElementById("wlReferred"),
     wlHospital:  document.getElementById("wlHospital"),
     dashError:   document.getElementById("dashError"),
+    idleWarning: document.getElementById("idleWarning"),
+    idleStay:    document.getElementById("idleStay"),
+    idleSignOutNow: document.getElementById("idleSignOutNow"),
+    idleCountdown:  document.getElementById("idleCountdown"),
   };
 
   // ---- Small helpers ------------------------------------------------------
@@ -78,7 +99,9 @@
   function showLoginView() {
     hide(els.dashboard);
     show(els.login);
-    setError(els.loginError, "");
+    // Preserve any pending notice (e.g. "signed out due to inactivity"); it is
+    // cleared when the patient starts interacting with the login screen.
+    setError(els.loginError, pendingLoginNotice || "");
     if (els.nhsLogin) els.nhsLogin.focus();
   }
   function showDashboardView() {
@@ -155,9 +178,71 @@
     if (session && session.user) {
       showDashboardView();
       hydrate(session.user);
+      armIdleTimers();
     } else {
+      clearIdleTimers();
+      hideIdleWarning();
       showLoginView();
     }
+  }
+
+  // ---- Session hygiene: idle auto sign-out --------------------------------
+  function isSignedIn() { return els.dashboard && !els.dashboard.hidden; }
+
+  function clearIdleTimers() {
+    if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+    if (warnTimer) { clearTimeout(warnTimer); warnTimer = null; }
+    if (countdownInt) { clearInterval(countdownInt); countdownInt = null; }
+  }
+
+  function hideIdleWarning() {
+    if (countdownInt) { clearInterval(countdownInt); countdownInt = null; }
+    hide(els.idleWarning);
+  }
+
+  function armIdleTimers() {
+    clearIdleTimers();
+    hide(els.idleWarning);
+    if (!isSignedIn()) return;
+    warnTimer = setTimeout(showIdleWarning, Math.max(0, IDLE_LIMIT_MS - IDLE_WARN_MS));
+    idleTimer = setTimeout(function () { performSignOut(IDLE_NOTICE); }, IDLE_LIMIT_MS);
+  }
+
+  function showIdleWarning() {
+    if (!isSignedIn()) return;
+    const logoutAt = Date.now() + IDLE_WARN_MS;
+    const tick = function () {
+      const secs = Math.max(0, Math.round((logoutAt - Date.now()) / 1000));
+      if (els.idleCountdown) {
+        els.idleCountdown.textContent =
+          "Signing out in " + secs + " second" + (secs === 1 ? "" : "s") + ".";
+      }
+    };
+    tick();
+    if (countdownInt) clearInterval(countdownInt);
+    countdownInt = setInterval(tick, 1000);
+    show(els.idleWarning);
+    if (els.idleStay) els.idleStay.focus();
+  }
+
+  function onUserActivity() {
+    if (!isSignedIn()) return;
+    const warningUp = els.idleWarning && !els.idleWarning.hidden;
+    const now = Date.now();
+    // Throttle re-arming during normal use; but always respond while the warning is up.
+    if (!warningUp && now - lastActivity < 1000) return;
+    lastActivity = now;
+    armIdleTimers();
+  }
+
+  async function performSignOut(notice) {
+    pendingLoginNotice = notice || "";
+    clearIdleTimers();
+    hideIdleWarning();
+    if (db) { try { await db.auth.signOut(); } catch (_) {} }
+    if (els.devSignin) hide(els.devSignin);
+    if (els.nhsLogin) show(els.nhsLogin);
+    route(null);
   }
 
   // ---- Auth lifecycle -----------------------------------------------------
@@ -183,6 +268,8 @@
   // Here it reveals the mock credential form (no creds are stored in the repo).
   if (els.nhsLogin) {
     els.nhsLogin.addEventListener("click", () => {
+      pendingLoginNotice = "";
+      setError(els.loginError, "");
       hide(els.nhsLogin);
       show(els.devSignin);
       if (els.devEmail) els.devEmail.focus();
@@ -192,6 +279,7 @@
   if (els.devSignin) {
     els.devSignin.addEventListener("submit", async (e) => {
       e.preventDefault();
+      pendingLoginNotice = "";
       setError(els.loginError, "");
       const email = (els.devEmail.value || "").trim();
       const password = els.devPassword.value || "";
@@ -222,14 +310,20 @@
 
   // ---- Sign out -----------------------------------------------------------
   if (els.signOut) {
-    els.signOut.addEventListener("click", async () => {
-      if (db) { try { await db.auth.signOut(); } catch (_) {} }
-      // Reset mock form state and route to login.
-      if (els.devSignin) hide(els.devSignin);
-      if (els.nhsLogin) show(els.nhsLogin);
-      route(null);
-    });
+    els.signOut.addEventListener("click", () => performSignOut(""));
   }
+
+  // ---- Idle-warning controls ----------------------------------------------
+  if (els.idleStay) {
+    els.idleStay.addEventListener("click", () => armIdleTimers());
+  }
+  if (els.idleSignOutNow) {
+    els.idleSignOutNow.addEventListener("click", () => performSignOut(""));
+  }
+
+  // Any interaction resets the idle timer (no-op when signed out).
+  ["pointerdown", "keydown", "touchstart", "scroll"].forEach((evt) =>
+    window.addEventListener(evt, onUserActivity, { passive: true }));
 
   // ---- Proxy view (MOCK) --------------------------------------------------
   // Real proxy access requires a verified proxy relationship + its own RLS and

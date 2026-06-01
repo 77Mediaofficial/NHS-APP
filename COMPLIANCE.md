@@ -55,8 +55,20 @@ start. **Do not describe as "compliant" at any score.**
       the entry to the **reversible** `PENDING_CANCELLATION` state for mandatory clinical review.
       Policy `pol_entries_update_definer` is locked to `WITH CHECK (status = 'PENDING_CANCELLATION')`,
       so this unauthenticated path can *never* write `CANCELLED`.
-  **Still open before go-live:** (a) define + own the clinical-review workflow that resolves
-  `PENDING_CANCELLATION` → `CANCELLED`/reinstated; (b) ⚠️ a prerequisite migration
+  (3) **Clinical-review resolution now in code** (`20260601010000_clinical_review_workflow.sql`):
+      `resolve_cancellation(entry_id, decision, note)` (SECURITY DEFINER, `authenticated`-only,
+      hospital-scoped, row-locked) makes the ONLY `PENDING_CANCELLATION → CANCELLED` (CONFIRM) or
+      `→ ACTIVE` (REINSTATE) transition, and every resolution is written to an append-only
+      `cancellation_reviews` audit ledger (who/when + before/after + optional clinical note).
+      `anon` is never granted execute, so the patient path still can never hard-cancel. A scoped
+      `pol_entries_resolve_definer` policy (USING `status='PENDING_CANCELLATION'`, WITH CHECK
+      `status IN ('CANCELLED','ACTIVE')`) bounds the transition at the RLS layer too. *Code-reviewed,
+      not executed (no live DB this session).*
+  **Still open before go-live:** (a) 🚫👤 a **staff-facing UI / tooling** that lists
+  `PENDING_CANCELLATION` entries and calls `resolve_cancellation()` — needs REAL staff auth + the
+  `hospital_id` JWT claim (not built; the workflow ships the safety-critical *mechanism*, the human
+  trigger is the follow-on), and **CSO sign-off + a Hazard Log / CSCR entry** for this workflow;
+  (b) ⚠️ a prerequisite migration
   (`20260528120000_waitlist_status_pending_cancellation.sql`, dated to run FIRST) now introspects
   the upstream `waitlist_entries.status` domain and adds `PENDING_CANCELLATION` automatically when it
   is an enum; if `status` is guarded by a CHECK constraint it raises an explicit NOTICE for manual
@@ -64,7 +76,9 @@ start. **Do not describe as "compliant" at any score.**
 - ⚠️ **HAZARD: wrong-recipient submission.** Token in SMS could reach the wrong person.
   Now mitigated by PII-free URL **+ the confirmation gate** (a mis-delivered link cannot one-tap
   a cancellation) **+ the reversible soft-state** (any erroneous response is recoverable via
-  clinical review). Still assess tamper-evident audit of who responded.
+  clinical review, now with an audited `resolve_cancellation` path that records who reinstated/confirmed).
+  Still assess tamper-evident audit of who *responded* (patient side): `validation_responses` records the
+  response but not a tamper-evident chain — see §6 audit-trail item.
 - ⚠️ **HAZARD: "symptoms worsened" has no urgent-routing SLA.** Confirm the clinical pathway
   that consumes `SYMPTOMS_WORSENED` responses and its response-time guarantee.
 - ❌ Hazard Log maintained as the system evolves (each new feature → hazard review).
@@ -165,7 +179,11 @@ Five-pillar routing (where each pillar is evidenced in this repo):
 - ✅ **Least privilege** — `anon` has EXECUTE on the RPC only; tables locked by forced RLS.
 - ✅ **SECURITY DEFINER hardened** — `SET search_path = public`.
 - ⚠️ **Audit trail** — who/when responded; ensure tamper-evidence and **no token↔PII
-  correlation in Supabase request logs**.
+  correlation in Supabase request logs**. *Partial:* clinician **resolutions** are now recorded in an
+  append-only `cancellation_reviews` ledger (reviewed_by + before/after + note; no UPDATE/DELETE policy,
+  so immutable from the app). Still ⚠️: this is immutable-by-RLS, **not** cryptographically tamper-evident
+  (hash-chaining is later hardening); and the **patient-response** side (`validation_responses`) still has
+  no tamper-evident chain. No token↔PII correlation to confirm in request logs.
 - ⚠️ **No secrets in client** — anon key is public-by-design ✅; confirm no service-role key
   ever reaches `frontend/`. Runtime config is isolated to `frontend/env.js` (`window.__ENV`, public
   URL + anon key only; `env.example.js` documents it). The service-role key stays server-side
@@ -404,3 +422,22 @@ _Last reviewed: 2026-06-01._
   the Trust must adopt, staff, rehearse, and own it.
 - Honesty note: both are drafted engineering aids with placeholders, **not** compliance claims. The
   destructive/credential steps in the runbook are flagged as human-only (no automation performs them).
+
+**Changelog — 2026-06-01 (clinical-review workflow for PENDING_CANCELLATION):**
+- §1 — Added `20260601010000_clinical_review_workflow.sql`, closing the long-open hazard sub-point that a
+  declined slot sat in the reversible `PENDING_CANCELLATION` soft-state with **no code path to resolve it**.
+  `resolve_cancellation(entry_id, decision, note)` (SECURITY DEFINER, `authenticated`-only, hospital-scoped,
+  `FOR UPDATE` row-locked, guarded to act ONLY on `PENDING_CANCELLATION`) makes the sole
+  CONFIRM_CANCELLATION→CANCELLED / REINSTATE→ACTIVE transition. The patient path is unchanged and `anon`
+  is never granted execute, so it still can never hard-cancel.
+- §1/§6 — New append-only `cancellation_reviews` audit ledger (reviewed_by=`auth.uid()`, before/after status,
+  optional clinical note; admin-RLS-scoped to hospital; no UPDATE/DELETE policy → immutable from the app).
+  §6 audit-trail item moved to *partial* — honestly flagged as immutable-by-RLS, **not** cryptographically
+  tamper-evident, and the patient-response side still lacks a chain.
+- RLS: added `pol_entries_resolve_definer` (USING `status='PENDING_CANCELLATION'`, WITH CHECK
+  `status IN ('CANCELLED','ACTIVE')`). Documented the OR-combination with the existing patient-path policy and
+  that the PRIMARY guarantee is the EXECUTE grant + in-function `auth.uid()`/hospital checks, not the RLS alone.
+- 🚫👤 Still open: a staff-facing UI that calls the RPC (needs real staff auth + `hospital_id` claim — not built),
+  **CSO sign-off + Hazard Log / CSCR** entry for the workflow.
+- Honesty note: code-reviewed, **NOT** executed (no live Postgres this session); no frontend surface to preview
+  (staff UI is the documented follow-on). Not a compliance claim — the clinical safety case remains 👤 with the CSO.

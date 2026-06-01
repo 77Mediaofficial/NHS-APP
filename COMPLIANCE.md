@@ -76,10 +76,10 @@ start. **Do not describe as "compliant" at any score.**
       `pol_entries_resolve_definer` policy (USING `status='PENDING_CANCELLATION'`, WITH CHECK
       `status IN ('CANCELLED','ACTIVE')`) bounds the transition at the RLS layer too. *Code-reviewed,
       not executed (no live DB this session).*
-  **Still open before go-live:** (a) 🚫👤 a **staff-facing UI / tooling** that lists
-  `PENDING_CANCELLATION` entries and calls `resolve_cancellation()` — needs REAL staff auth + the
-  `hospital_id` JWT claim (not built; the workflow ships the safety-critical *mechanism*, the human
-  trigger is the follow-on), and **CSO sign-off + a Hazard Log / CSCR entry** for this workflow;
+  **Still open before go-live:** (a) ⚠️👤 a **staff-facing UI** that lists `PENDING_CANCELLATION` entries and
+  calls `resolve_cancellation()` — now BUILT as a **mock-auth demo** (`staff/`, see §11) wired to the real RPC;
+  still 👤 REAL staff auth + the `hospital_id` JWT claim (the demo uses mock sign-in), plus **CSO sign-off + a
+  Hazard Log / CSCR entry** for this workflow;
   (b) ⚠️ a prerequisite migration
   (`20260528120000_waitlist_status_pending_cancellation.sql`, dated to run FIRST) now introspects
   the upstream `waitlist_entries.status` domain and adds `PENDING_CANCELLATION` automatically when it
@@ -315,6 +315,33 @@ Five-pillar routing (where each pillar is evidenced in this repo):
   auto sign-out + notice; "Stay signed in" cancels the logout past the original deadline). `portal/app.js`
   (`armIdleTimers`/`showIdleWarning`/`performSignOut`), `portal/index.html` (`#idleWarning`), `portal/styles.css` (`.idle`).
 - *Interactive login→dashboard click-through to be verified in the repo-rooted session (preview "portal", :5700).*
+
+## 11. Staff Console (clinical review + proxy management) — `staff/` ⚠️
+*A separate authenticated STAFF surface that drives the §1 clinical-review workflow and the §10 proxy
+mechanism. It exists so the safety-critical RPCs have a human trigger. Demo/mock auth only today.*
+
+- ⚠️👤 **Mock staff auth (production needs real).** Ships with a mock sign-in for local demo; production must
+  wire **NHS staff authentication** (Care Identity / hospital SSO) issuing the **`hospital_id` JWT claim** that
+  the admin RLS + the RPCs depend on. No credentials in the repo. **This is the single biggest open item for
+  this surface** — until real staff auth exists, the console cannot be used on real data.
+- ✅ **Actions go through the hardened RPCs, never raw table writes.** Reinstate/Confirm call
+  `resolve_cancellation(entry_id, decision)`; proxy grant/revoke call `grant_proxy_access` (staff-gated) /
+  `revoke_proxy_access`. The client never mutates tables directly — server-side `auth.uid()`/`hospital_id`
+  checks are the real control.
+- ✅ **Data minimisation in the worklist.** The worklist query selects only `id, procedure, referred_at, status`
+  — **no `nhs_number`** to the staff browser; isolation is by the admin RLS (`hospital_id`).
+- ⚠️ **Worklist read scope.** Relies on the §6 admin SELECT policy (`hospital_id = auth.current_hospital_id()`).
+  Correct ONLY when staff JWTs carry the hospital claim (the production-auth dependency above).
+- ✅ **Same security envelope as the portal.** Own `staff/vercel.json` (CSP incl. `wss:`, HSTS, hardening
+  headers) + byte-aligned `<meta>` CSP; SRI-pinned `supabase-js@2.106.2`; PUBLIC-only `staff/env.js` (gitignored).
+- ✅ **Accessibility (WCAG 2.2 AA aim).** Shared NHS palette + tokens, 48px targets, `:focus-visible` ring, skip
+  link, `role="status"`/`alert`, `forced-colors` + reduced-motion, white-on-red danger button (≈4.8:1). Still
+  ❌ formal audit + AT testing (shared with §5).
+- ⚠️ **Honest demo banner.** A persistent `role="note"` banner states this is mock staff sign-in, not production
+  auth — so a reviewer is never misled about what it is.
+- *Verified at logic level this session (Node DOM stub: `?demo=1` → console + 2-item worklist renders; clicking
+  Reinstate transitions the entry and it leaves the worklist). Browser-eval click-through deferred (preview tool
+  had no `staff` surface this session); live verification is in DEPLOYMENT.md §6.*
 
 ---
 
@@ -586,3 +613,19 @@ _Last reviewed: 2026-06-01._
 - Why drafts (not "done"): completing these is the legal responsibility of the DPO/Caldicott/CSO; an engineer
   pre-filling the *factual/technical* parts accelerates them without crossing into decisions only those roles
   may make. Both files carry a prominent "DRAFT — confers no compliance" banner, consistent with the honesty rule.
+
+**Changelog — 2026-06-01 (staff console — clinical-review + proxy UI, mock auth):**
+- §11 (NEW) — Built `staff/` (index.html + app.js + styles.css + vercel.json + env.example.js): an authenticated
+  staff surface that drives the §1 clinical-review workflow (a worklist of `PENDING_CANCELLATION` entries with
+  Reinstate / Confirm-cancellation actions) and the §10 proxy mechanism (grant/revoke). Gives the safety-critical
+  RPCs their human trigger. §1 hazard sub-point (a) `🚫👤 → ⚠️👤` (UI now exists; real staff auth still 👤).
+- Security posture: all mutations go through the hardened RPCs (`resolve_cancellation`, staff-gated
+  `grant_proxy_access`, `revoke_proxy_access`) — never raw table writes; worklist selects only non-PII columns
+  (no `nhs_number` to the browser); own `vercel.json` security headers + byte-aligned meta CSP + SRI; `staff/env.js`
+  gitignored (PUBLIC keys only). Shared NHS design system + WCAG 2.2 AA patterns.
+- Honesty: persistent demo banner states it's mock staff sign-in, not production auth. Verified at LOGIC level
+  (Node DOM stub: `?demo=1` renders the console + a 2-item worklist; Reinstate transitions an entry and it leaves
+  the worklist). Browser click-through deferred (preview tool had no `staff` surface this session) → DEPLOYMENT.md §6.
+- 👤 Biggest open item for this surface: real NHS staff authentication (Care Identity / SSO) issuing the
+  `hospital_id` claim the RLS + RPCs require. Added `staff` to `.claude/launch.json` (:5800) and `staff/env.js`
+  to `.gitignore`. Not a compliance claim.

@@ -9,7 +9,7 @@
 > gitignored `env.js` is excluded and only the `env.example.js` template appears.
 
 
-**43 files** in this bundle.
+**48 files** in this bundle.
 
 
 ## Contents
@@ -57,6 +57,11 @@
 - [`SECURITY-INCIDENT.md`](#security-incident-md)
 - [`governance/DPIA-DRAFT.md`](#governance-dpia-draft-md)
 - [`governance/HAZARD-LOG-DRAFT.md`](#governance-hazard-log-draft-md)
+- [`staff/app.js`](#staff-app-js)
+- [`staff/env.example.js`](#staff-env-example-js)
+- [`staff/index.html`](#staff-index-html)
+- [`staff/styles.css`](#staff-styles-css)
+- [`staff/vercel.json`](#staff-vercel-json)
 
 
 ---
@@ -268,10 +273,10 @@ start. **Do not describe as "compliant" at any score.**
       `pol_entries_resolve_definer` policy (USING `status='PENDING_CANCELLATION'`, WITH CHECK
       `status IN ('CANCELLED','ACTIVE')`) bounds the transition at the RLS layer too. *Code-reviewed,
       not executed (no live DB this session).*
-  **Still open before go-live:** (a) 🚫👤 a **staff-facing UI / tooling** that lists
-  `PENDING_CANCELLATION` entries and calls `resolve_cancellation()` — needs REAL staff auth + the
-  `hospital_id` JWT claim (not built; the workflow ships the safety-critical *mechanism*, the human
-  trigger is the follow-on), and **CSO sign-off + a Hazard Log / CSCR entry** for this workflow;
+  **Still open before go-live:** (a) ⚠️👤 a **staff-facing UI** that lists `PENDING_CANCELLATION` entries and
+  calls `resolve_cancellation()` — now BUILT as a **mock-auth demo** (`staff/`, see §11) wired to the real RPC;
+  still 👤 REAL staff auth + the `hospital_id` JWT claim (the demo uses mock sign-in), plus **CSO sign-off + a
+  Hazard Log / CSCR entry** for this workflow;
   (b) ⚠️ a prerequisite migration
   (`20260528120000_waitlist_status_pending_cancellation.sql`, dated to run FIRST) now introspects
   the upstream `waitlist_entries.status` domain and adds `PENDING_CANCELLATION` automatically when it
@@ -507,6 +512,33 @@ Five-pillar routing (where each pillar is evidenced in this repo):
   auto sign-out + notice; "Stay signed in" cancels the logout past the original deadline). `portal/app.js`
   (`armIdleTimers`/`showIdleWarning`/`performSignOut`), `portal/index.html` (`#idleWarning`), `portal/styles.css` (`.idle`).
 - *Interactive login→dashboard click-through to be verified in the repo-rooted session (preview "portal", :5700).*
+
+## 11. Staff Console (clinical review + proxy management) — `staff/` ⚠️
+*A separate authenticated STAFF surface that drives the §1 clinical-review workflow and the §10 proxy
+mechanism. It exists so the safety-critical RPCs have a human trigger. Demo/mock auth only today.*
+
+- ⚠️👤 **Mock staff auth (production needs real).** Ships with a mock sign-in for local demo; production must
+  wire **NHS staff authentication** (Care Identity / hospital SSO) issuing the **`hospital_id` JWT claim** that
+  the admin RLS + the RPCs depend on. No credentials in the repo. **This is the single biggest open item for
+  this surface** — until real staff auth exists, the console cannot be used on real data.
+- ✅ **Actions go through the hardened RPCs, never raw table writes.** Reinstate/Confirm call
+  `resolve_cancellation(entry_id, decision)`; proxy grant/revoke call `grant_proxy_access` (staff-gated) /
+  `revoke_proxy_access`. The client never mutates tables directly — server-side `auth.uid()`/`hospital_id`
+  checks are the real control.
+- ✅ **Data minimisation in the worklist.** The worklist query selects only `id, procedure, referred_at, status`
+  — **no `nhs_number`** to the staff browser; isolation is by the admin RLS (`hospital_id`).
+- ⚠️ **Worklist read scope.** Relies on the §6 admin SELECT policy (`hospital_id = auth.current_hospital_id()`).
+  Correct ONLY when staff JWTs carry the hospital claim (the production-auth dependency above).
+- ✅ **Same security envelope as the portal.** Own `staff/vercel.json` (CSP incl. `wss:`, HSTS, hardening
+  headers) + byte-aligned `<meta>` CSP; SRI-pinned `supabase-js@2.106.2`; PUBLIC-only `staff/env.js` (gitignored).
+- ✅ **Accessibility (WCAG 2.2 AA aim).** Shared NHS palette + tokens, 48px targets, `:focus-visible` ring, skip
+  link, `role="status"`/`alert`, `forced-colors` + reduced-motion, white-on-red danger button (≈4.8:1). Still
+  ❌ formal audit + AT testing (shared with §5).
+- ⚠️ **Honest demo banner.** A persistent `role="note"` banner states this is mock staff sign-in, not production
+  auth — so a reviewer is never misled about what it is.
+- *Verified at logic level this session (Node DOM stub: `?demo=1` → console + 2-item worklist renders; clicking
+  Reinstate transitions the entry and it leaves the worklist). Browser-eval click-through deferred (preview tool
+  had no `staff` surface this session); live verification is in DEPLOYMENT.md §6.*
 
 ---
 
@@ -778,6 +810,22 @@ _Last reviewed: 2026-06-01._
 - Why drafts (not "done"): completing these is the legal responsibility of the DPO/Caldicott/CSO; an engineer
   pre-filling the *factual/technical* parts accelerates them without crossing into decisions only those roles
   may make. Both files carry a prominent "DRAFT — confers no compliance" banner, consistent with the honesty rule.
+
+**Changelog — 2026-06-01 (staff console — clinical-review + proxy UI, mock auth):**
+- §11 (NEW) — Built `staff/` (index.html + app.js + styles.css + vercel.json + env.example.js): an authenticated
+  staff surface that drives the §1 clinical-review workflow (a worklist of `PENDING_CANCELLATION` entries with
+  Reinstate / Confirm-cancellation actions) and the §10 proxy mechanism (grant/revoke). Gives the safety-critical
+  RPCs their human trigger. §1 hazard sub-point (a) `🚫👤 → ⚠️👤` (UI now exists; real staff auth still 👤).
+- Security posture: all mutations go through the hardened RPCs (`resolve_cancellation`, staff-gated
+  `grant_proxy_access`, `revoke_proxy_access`) — never raw table writes; worklist selects only non-PII columns
+  (no `nhs_number` to the browser); own `vercel.json` security headers + byte-aligned meta CSP + SRI; `staff/env.js`
+  gitignored (PUBLIC keys only). Shared NHS design system + WCAG 2.2 AA patterns.
+- Honesty: persistent demo banner states it's mock staff sign-in, not production auth. Verified at LOGIC level
+  (Node DOM stub: `?demo=1` renders the console + a 2-item worklist; Reinstate transitions an entry and it leaves
+  the worklist). Browser click-through deferred (preview tool had no `staff` surface this session) → DEPLOYMENT.md §6.
+- 👤 Biggest open item for this surface: real NHS staff authentication (Care Identity / SSO) issuing the
+  `hospital_id` claim the RLS + RPCs require. Added `staff` to `.claude/launch.json` (:5800) and `staff/env.js`
+  to `.gitignore`. Not a compliance claim.
 ```
 
 ---
@@ -5371,6 +5419,12 @@ if __name__ == "__main__":
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "5700", "--directory", "portal"],
       "port": 5700
+    },
+    {
+      "name": "staff",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5800", "--directory", "staff"],
+      "port": 5800
     }
   ]
 }
@@ -5620,6 +5674,7 @@ COMPLIANCE_CHANGELOG.md merge=union
 # never be pushed by accident.
 frontend/env.js
 portal/env.js
+staff/env.js
 
 # ---- Supabase local state --------------------------------------------------
 .supabase/
@@ -6185,4 +6240,634 @@ residual scores; the values below are deliberately left blank.**
   (`SECURITY-INCIDENT.md` links operational incidents to clinical review).
 
 _Draft prepared 2026-06-01 (engineering). Clinical ownership: `%%CSO_NAME%%`. This draft confers no clinical-safety assurance._
+```
+
+---
+
+
+## `staff/app.js`
+
+```javascript
+/* =========================================================================
+   NHS Staff Console — clinical-review worklist + proxy management
+   Pure vanilla JS + Supabase JS client (CDN global `supabase`).
+
+   SECURITY MODEL:
+   - Authenticated STAFF surface. In production, sign-in must carry the
+     `hospital_id` JWT claim; the worklist read is scoped by admin RLS
+     (hospital_id = auth.current_hospital_id()), and the actions call the
+     SECURITY DEFINER RPCs that re-check that scope server-side:
+       • resolve_cancellation(entry_id, decision, note)
+       • grant_proxy_access(subject, proxy, relationship, valid_until, note)  [staff-gated]
+       • revoke_proxy_access(subject, proxy)
+   - This file NEVER trusts the client for authorisation — every mutation goes
+     through an RPC whose server-side checks are the real control.
+   - DEV/MOCK: when Supabase is NOT configured, a mock session + sample worklist
+     make the workflow previewable. The mock can never run in a configured deploy.
+   - No credentials stored in the repo; env.js holds only the PUBLIC url + anon key.
+   ========================================================================= */
+(() => {
+  "use strict";
+
+  const SUPABASE_URL = window.__ENV?.SUPABASE_URL || "%%SUPABASE_URL%%";
+  const SUPABASE_ANON_KEY = window.__ENV?.SUPABASE_ANON_KEY || "%%SUPABASE_ANON_KEY%%";
+  const configured =
+    SUPABASE_URL && !SUPABASE_URL.startsWith("%%") &&
+    SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.startsWith("%%");
+
+  let db = null;
+  if (configured && window.supabase?.createClient) {
+    db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+    });
+  }
+  const devMock = !db;
+
+  const els = {
+    login:        document.getElementById("login"),
+    console:      document.getElementById("console"),
+    staffSignin:  document.getElementById("staffSignin"),
+    staffEmail:   document.getElementById("staffEmail"),
+    staffPassword:document.getElementById("staffPassword"),
+    staffSubmit:  document.getElementById("staffSubmit"),
+    loginError:   document.getElementById("loginError"),
+    signOut:      document.getElementById("signOut"),
+    hospitalLabel:document.getElementById("hospitalLabel"),
+    worklist:     document.getElementById("worklist"),
+    worklistEmpty:document.getElementById("worklistEmpty"),
+    pxSubject:    document.getElementById("pxSubject"),
+    pxProxy:      document.getElementById("pxProxy"),
+    pxRel:        document.getElementById("pxRel"),
+    pxGrant:      document.getElementById("pxGrant"),
+    pxRevoke:     document.getElementById("pxRevoke"),
+    proxyMsg:     document.getElementById("proxyMsg"),
+    consoleError: document.getElementById("consoleError"),
+  };
+
+  // ---- Helpers ------------------------------------------------------------
+  const show = (el) => { if (el) el.hidden = false; };
+  const hide = (el) => { if (el) el.hidden = true; };
+  const setMsg = (el, msg, kind) => {
+    if (!el) return;
+    el.textContent = msg; el.hidden = !msg;
+    el.dataset.kind = kind || "";
+  };
+  const setBusy = (btn, busy) => { if (btn) { btn.setAttribute("aria-busy", String(busy)); btn.disabled = busy; } };
+  const fmtDate = (v) => {
+    if (!v) return "—";
+    const d = new Date(v);
+    return isNaN(d) ? String(v) : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  };
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  // ---- Mock state (dev only) ---------------------------------------------
+  let mockRows = [
+    { id: "11111111-1111-1111-1111-111111111111", procedure: "Total Hip Replacement", referred_at: "2026-02-10", status: "PENDING_CANCELLATION" },
+    { id: "22222222-2222-2222-2222-222222222222", procedure: "Cataract Surgery",       referred_at: "2026-03-22", status: "PENDING_CANCELLATION" },
+  ];
+
+  // ---- Views --------------------------------------------------------------
+  function showLogin() { hide(els.console); show(els.login); if (els.staffEmail) els.staffEmail.focus(); }
+  function showConsole() { hide(els.login); show(els.console); }
+
+  function route(session) {
+    if (session && session.user) {
+      showConsole();
+      els.hospitalLabel.textContent = devMock ? "Demo Hospital (mock)" : "Your hospital";
+      loadWorklist();
+    } else {
+      showLogin();
+    }
+  }
+
+  // ---- Worklist (entries awaiting clinical review) ------------------------
+  async function loadWorklist() {
+    setMsg(els.consoleError, "", "");
+    let rows = [];
+    try {
+      if (devMock) {
+        rows = mockRows.filter((r) => r.status === "PENDING_CANCELLATION");
+      } else {
+        // Admin RLS scopes this to the staff member's own hospital. We request only
+        // the non-identifying columns the worklist needs (no nhs_number to the client).
+        const { data, error } = await db
+          .from("waitlist_entries")
+          .select("id, procedure, referred_at, status")
+          .eq("status", "PENDING_CANCELLATION")
+          .order("referred_at", { ascending: true });
+        if (error) throw error;
+        rows = data || [];
+      }
+    } catch (err) {
+      console.error("worklist load failed:", err);
+      setMsg(els.consoleError, "We couldn’t load the worklist right now. Please try again.", "error");
+    }
+    renderWorklist(rows);
+  }
+
+  function renderWorklist(rows) {
+    els.worklist.innerHTML = "";
+    if (!rows.length) { show(els.worklistEmpty); return; }
+    hide(els.worklistEmpty);
+    for (const r of rows) {
+      const li = document.createElement("li");
+      li.className = "wl-item";
+      li.innerHTML =
+        '<div class="wl-item__body">' +
+          '<p class="wl-item__proc">' + esc(r.procedure || "Procedure") + "</p>" +
+          '<p class="wl-item__meta">Referred ' + esc(fmtDate(r.referred_at)) +
+            ' · entry <code>' + esc(String(r.id).slice(0, 8)) + "…</code></p>" +
+        "</div>" +
+        '<div class="wl-item__actions">' +
+          '<button class="btn btn--primary" type="button" data-act="reinstate" data-id="' + esc(r.id) + '">Reinstate</button>' +
+          '<button class="btn btn--danger" type="button" data-act="confirm" data-id="' + esc(r.id) + '">Confirm cancellation</button>' +
+        "</div>";
+      els.worklist.appendChild(li);
+    }
+  }
+
+  async function resolve(entryId, decision, btn) {
+    // decision: 'REINSTATE' | 'CONFIRM_CANCELLATION'
+    setBusy(btn, true);
+    setMsg(els.consoleError, "", "");
+    try {
+      if (devMock) {
+        await new Promise((r) => setTimeout(r, 350));
+        mockRows = mockRows.map((r) => r.id === entryId
+          ? { ...r, status: decision === "REINSTATE" ? "ACTIVE" : "CANCELLED" } : r);
+      } else {
+        const { error } = await db.rpc("resolve_cancellation", {
+          p_entry_id: entryId, p_decision: decision, p_note: null,
+        });
+        if (error) throw error;
+      }
+      await loadWorklist();
+    } catch (err) {
+      console.error("resolve failed:", err);
+      setBusy(btn, false);
+      setMsg(els.consoleError,
+        "That action didn’t complete. The entry may have already been resolved — refresh and check.", "error");
+    }
+  }
+
+  // ---- Proxy management ---------------------------------------------------
+  async function grantProxy() {
+    const subject = (els.pxSubject.value || "").trim();
+    const proxy   = (els.pxProxy.value || "").trim();
+    const rel     = (els.pxRel.value || "").trim();
+    if (!subject || !proxy || !rel) { setMsg(els.proxyMsg, "Enter subject, proxy, and relationship.", "error"); return; }
+    setBusy(els.pxGrant, true); setMsg(els.proxyMsg, "", "");
+    try {
+      if (devMock) {
+        await new Promise((r) => setTimeout(r, 350));
+        setMsg(els.proxyMsg, "Demo: would record a GRANTED proxy (real grant needs Caldicott consent + staff auth).", "ok");
+      } else {
+        const { error } = await db.rpc("grant_proxy_access", {
+          p_subject: subject, p_proxy: proxy, p_relationship: rel, p_valid_until: null, p_note: null,
+        });
+        if (error) throw error;
+        setMsg(els.proxyMsg, "Proxy access granted.", "ok");
+      }
+    } catch (err) {
+      console.error("grant failed:", err);
+      setMsg(els.proxyMsg, "Grant failed — you may not be authorised, or the IDs are invalid.", "error");
+    } finally {
+      setBusy(els.pxGrant, false);
+    }
+  }
+
+  async function revokeProxy() {
+    const subject = (els.pxSubject.value || "").trim();
+    const proxy   = (els.pxProxy.value || "").trim();
+    if (!subject || !proxy) { setMsg(els.proxyMsg, "Enter subject and proxy to revoke.", "error"); return; }
+    setBusy(els.pxRevoke, true); setMsg(els.proxyMsg, "", "");
+    try {
+      if (devMock) {
+        await new Promise((r) => setTimeout(r, 350));
+        setMsg(els.proxyMsg, "Demo: would revoke the proxy relationship.", "ok");
+      } else {
+        const { data, error } = await db.rpc("revoke_proxy_access", { p_subject: subject, p_proxy: proxy });
+        if (error) throw error;
+        const n = (data && data.revoked) || 0;
+        setMsg(els.proxyMsg, n ? "Proxy access revoked." : "No active relationship found to revoke.", "ok");
+      }
+    } catch (err) {
+      console.error("revoke failed:", err);
+      setMsg(els.proxyMsg, "Revoke failed. Please try again.", "error");
+    } finally {
+      setBusy(els.pxRevoke, false);
+    }
+  }
+
+  // ---- Auth lifecycle -----------------------------------------------------
+  if (db) {
+    db.auth.onAuthStateChange((_e, session) => route(session));
+    db.auth.getSession().then(({ data }) => route(data.session)).catch(() => showLogin());
+  } else {
+    const params = new URLSearchParams(location.search);
+    if (params.get("demo")) {
+      route({ user: { email: "clinician@example.nhs.uk" } });
+    } else {
+      showLogin();
+    }
+  }
+
+  // ---- Events -------------------------------------------------------------
+  if (els.staffSignin) {
+    els.staffSignin.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      setMsg(els.loginError, "", "");
+      const email = (els.staffEmail.value || "").trim();
+      const password = els.staffPassword.value || "";
+      if (!email || !password) { setMsg(els.loginError, "Enter your email and password.", "error"); return; }
+      setBusy(els.staffSubmit, true);
+      try {
+        if (devMock) {
+          await new Promise((r) => setTimeout(r, 400));
+          route({ user: { email } });
+        } else {
+          const { error } = await db.auth.signInWithPassword({ email, password });
+          if (error) throw error;
+        }
+      } catch (err) {
+        console.error("staff sign-in failed:", err);
+        setMsg(els.loginError, "We couldn’t sign you in. Check your details and try again.", "error");
+      } finally {
+        setBusy(els.staffSubmit, false);
+        if (els.staffPassword) els.staffPassword.value = "";
+      }
+    });
+  }
+
+  if (els.signOut) {
+    els.signOut.addEventListener("click", async () => {
+      if (db) { try { await db.auth.signOut(); } catch (_) {} }
+      route(null);
+    });
+  }
+
+  // Event delegation for the worklist action buttons.
+  if (els.worklist) {
+    els.worklist.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-act]");
+      if (!btn) return;
+      const id = btn.getAttribute("data-id");
+      const act = btn.getAttribute("data-act");
+      if (act === "reinstate") resolve(id, "REINSTATE", btn);
+      else if (act === "confirm") resolve(id, "CONFIRM_CANCELLATION", btn);
+    });
+  }
+
+  if (els.pxGrant) els.pxGrant.addEventListener("click", grantProxy);
+  if (els.pxRevoke) els.pxRevoke.addEventListener("click", revokeProxy);
+})();
+```
+
+---
+
+
+## `staff/env.example.js`
+
+```javascript
+/* =========================================================================
+   Runtime configuration template for the NHS Staff Console (staff/).
+   Copy to env.js and fill in, OR generate env.js at deploy time.
+
+   SECURITY:
+     • SUPABASE_URL + SUPABASE_ANON_KEY are PUBLIC by design. Staff actions run
+       under the signed-in staff member's JWT; the worklist read is scoped by
+       admin RLS (hospital_id) and every mutation goes through a SECURITY DEFINER
+       RPC that re-checks authorisation server-side.
+     • NEVER put the service-role key (or any secret) here — it would be exposed
+       to every visitor. Secrets live only in server-side functions.
+     • PRODUCTION AUTH: this console ships with a MOCK sign-in for local demo.
+       Real deployment must wire NHS staff authentication (Care Identity / hospital
+       SSO) that issues the `hospital_id` JWT claim the RLS + RPCs depend on. That
+       integration is a Trust step — see DEPLOYMENT.md.
+   ========================================================================= */
+window.__ENV = {
+  SUPABASE_URL: "https://YOUR-PROJECT-REF.supabase.co",
+  SUPABASE_ANON_KEY: "YOUR-PUBLIC-ANON-KEY",
+};
+```
+
+---
+
+
+## `staff/index.html`
+
+```html
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="color-scheme" content="light" />
+  <title>Staff Console — Waitlist Clinical Review (NHS)</title>
+  <meta name="description" content="Staff console: review pending waitlist cancellations and manage proxy access." />
+
+  <!-- CSP: defence-in-depth; authoritative policy is the HTTP header in staff/vercel.json
+       (kept byte-aligned). connect-src allows Supabase REST + Auth + Realtime (wss). -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests" />
+
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="styles.css?v=20260601" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <!-- DEV/MOCK BANNER: this console uses mock auth for local demo. In production it is
+       replaced by real staff authentication carrying the hospital_id JWT claim. -->
+  <p class="devbanner" role="note">
+    Demo console — <strong>mock staff sign-in</strong>. Production requires real NHS
+    staff authentication (Care Identity / hospital SSO) with a verified hospital scope.
+  </p>
+
+  <main id="main" class="stage">
+
+    <!-- ===== STATE A — signed out ===== -->
+    <section id="login" class="card login" aria-labelledby="loginTitle" hidden>
+      <div class="brand">
+        <div class="brand__mark" aria-hidden="true">
+          <svg viewBox="0 0 80 32" role="img" focusable="false">
+            <rect width="80" height="32" rx="4" fill="currentColor" />
+            <text x="40" y="22" text-anchor="middle" font-family="Arial, sans-serif"
+                  font-weight="700" font-size="16" fill="#ffffff" letter-spacing="0.5">NHS</text>
+          </svg>
+        </div>
+        <p class="brand__trust">Staff Console</p>
+      </div>
+      <h1 id="loginTitle" class="headline">Waitlist clinical review</h1>
+      <p class="lede">Sign in to review patient responses that need clinical action and to manage proxy access.</p>
+
+      <form id="staffSignin" class="devform">
+        <p class="devform__note">Mock staff sign-in (local demo only — no real credentials stored)</p>
+        <label class="field">
+          <span class="field__label">Staff email</span>
+          <input id="staffEmail" class="field__input" type="email" autocomplete="username" inputmode="email" required />
+        </label>
+        <label class="field">
+          <span class="field__label">Password</span>
+          <input id="staffPassword" class="field__input" type="password" autocomplete="current-password" required />
+        </label>
+        <button id="staffSubmit" class="btn btn--primary" type="submit"><span class="btn__label">Sign in</span></button>
+      </form>
+      <p id="loginError" class="error" role="alert" hidden></p>
+    </section>
+
+    <!-- ===== STATE B — signed in ===== -->
+    <section id="console" class="console" aria-labelledby="consoleTitle" hidden>
+      <header class="topbar">
+        <div class="brand brand--inline">
+          <div class="brand__mark brand__mark--sm" aria-hidden="true">
+            <svg viewBox="0 0 80 32" role="img" focusable="false">
+              <rect width="80" height="32" rx="4" fill="currentColor" />
+              <text x="40" y="22" text-anchor="middle" font-family="Arial, sans-serif"
+                    font-weight="700" font-size="16" fill="#ffffff" letter-spacing="0.5">NHS</text>
+            </svg>
+          </div>
+          <span id="hospitalLabel" class="topbar__scope">—</span>
+        </div>
+        <button id="signOut" class="btn btn--ghost" type="button">Sign out</button>
+      </header>
+
+      <h1 id="consoleTitle" class="console__title">Clinical review worklist</h1>
+      <p class="console__lead">Patients who tapped “I no longer need this”. Each entry is held in a
+        <strong>reversible</strong> state until you confirm or reinstate it — nothing was auto-cancelled.</p>
+
+      <p id="worklistEmpty" class="empty" hidden>No entries are awaiting review.</p>
+
+      <ul id="worklist" class="worklist" aria-label="Entries awaiting clinical review"></ul>
+
+      <!-- Proxy management -->
+      <section class="panel" aria-labelledby="proxyTitle">
+        <h2 id="proxyTitle" class="panel__title">Proxy access</h2>
+        <p class="panel__lead">Grant a verified carer/parent access to a patient’s record, or revoke it.
+          Granting requires recorded Caldicott consent + identity verification (out of band).</p>
+        <div class="proxy-grid">
+          <label class="field"><span class="field__label">Patient (subject) user ID</span>
+            <input id="pxSubject" class="field__input" type="text" inputmode="text" placeholder="uuid" /></label>
+          <label class="field"><span class="field__label">Proxy user ID</span>
+            <input id="pxProxy" class="field__input" type="text" inputmode="text" placeholder="uuid" /></label>
+          <label class="field"><span class="field__label">Relationship</span>
+            <input id="pxRel" class="field__input" type="text" placeholder="parent / carer / LPA" /></label>
+        </div>
+        <div class="proxy-actions">
+          <button id="pxGrant" class="btn btn--primary" type="button">Grant access</button>
+          <button id="pxRevoke" class="btn btn--ghost" type="button">Revoke access</button>
+        </div>
+        <p id="proxyMsg" class="msg" role="status" hidden></p>
+      </section>
+
+      <p id="consoleError" class="error" role="alert" hidden></p>
+    </section>
+  </main>
+
+  <script
+    src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.106.2"
+    integrity="sha384-4Cjkyy4cE1EgIS0C+Y3xzGmJ2noQFRRU91yKAW8IxtPfVtbQXPMqadSc3sYnjwou"
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"></script>
+  <script src="env.js"></script>
+  <script src="app.js?v=20260601" defer></script>
+</body>
+</html>
+```
+
+---
+
+
+## `staff/styles.css`
+
+```css
+/* =========================================================================
+   NHS Staff Console — styles.css
+   Built to ALIGN WITH the NHS Digital Service Manual + WCAG 2.2 AA (same palette
+   + tokens as the patient portal). Self-contained (separate Vercel deploy, so no
+   cross-directory @import). Light-only. Logo is a placeholder; not NHS-accredited.
+   Contrast ratios noted are developer-measured vs AA — confirm in a formal audit.
+   ========================================================================= */
+:root {
+  --nhs-blue: #005EB8; --nhs-dark-blue: #003087; --nhs-black: #212B32;
+  --nhs-grey-1: #4C6272; --nhs-pale-grey: #E8EDEE; --nhs-mid-grey: #AEB7BD;
+  --nhs-white: #FFFFFF; --nhs-green: #007F3B; --nhs-red: #DA291C; --nhs-yellow: #FFEB3B;
+  --nhs-warm-yellow: #FFB81C;
+  --ink: var(--nhs-black); --ink-soft: var(--nhs-grey-1); --line: #D8DDE0;
+  --surface: var(--nhs-white); --canvas: var(--nhs-pale-grey);
+  --primary: var(--nhs-blue); --primary-press: var(--nhs-dark-blue); --focus: var(--nhs-yellow);
+  --shadow: 0 1px 2px rgba(33,43,50,.06), 0 6px 18px rgba(33,43,50,.08);
+  --radius: 8px; --radius-sm: 6px; --tap: 48px;
+  --ease: cubic-bezier(.2,.7,.2,1);
+  --font: "Inter", Arial, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, sans-serif;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
+[hidden] { display: none !important; }
+
+body {
+  font-family: var(--font); color: var(--ink); background: var(--canvas);
+  line-height: 1.55; min-height: 100svh; -webkit-font-smoothing: antialiased;
+}
+
+/* ---- Accessibility primitives ---- */
+.skip-link {
+  position: fixed; top: -120px; left: 12px; z-index: 100; padding: 12px 16px;
+  background: var(--nhs-black); color: #fff; border-radius: var(--radius-sm);
+  text-decoration: none; transition: top .15s var(--ease);
+}
+.skip-link:focus-visible { top: 12px; }
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--focus); outline-offset: 2px;
+  box-shadow: 0 0 0 5px var(--nhs-black); border-radius: var(--radius-sm);
+}
+
+/* ---- Demo banner (mock-auth honesty) ---- */
+.devbanner {
+  background: #FFF4D6; border-bottom: 2px solid var(--nhs-warm-yellow);
+  color: #3d2f00; padding: 10px 20px; font-size: .95rem; text-align: center;
+}
+
+/* ---- Layout ---- */
+.stage { max-width: 860px; margin: 0 auto; padding: 28px 20px 64px; }
+
+.card {
+  background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 32px 28px; margin-top: 28px;
+}
+.login { max-width: 480px; }
+
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand--inline { margin: 0; }
+.brand__mark { color: var(--nhs-blue); width: 80px; }
+.brand__mark--sm { width: 56px; }
+.brand__mark svg { width: 100%; height: auto; display: block; }
+.brand__trust, .topbar__scope { font-weight: 600; color: var(--ink-soft); }
+
+.headline { font-size: 1.9rem; line-height: 1.15; margin: 18px 0 10px; }
+.lede { color: var(--ink-soft); font-size: 1.0625rem; margin-bottom: 22px; }
+
+/* ---- Buttons ---- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: var(--tap); padding: 12px 20px; border: 0; border-radius: var(--radius-sm);
+  font: inherit; font-weight: 600; font-size: 1.0625rem; cursor: pointer;
+  transition: background .15s var(--ease), transform .05s var(--ease);
+}
+.btn--primary { background: var(--primary); color: #fff; box-shadow: var(--shadow); }
+.btn--primary:hover { background: var(--primary-press); }
+.btn--ghost { background: #fff; color: var(--nhs-blue); border: 2px solid var(--nhs-blue); }
+.btn--ghost:hover { background: #eef4fb; }
+.btn--danger { background: var(--nhs-red); color: #fff; }     /* white-on-red ≈ 4.8:1 (AA) */
+.btn--danger:hover { background: #b71f14; }
+.btn:active { transform: scale(.99); }
+.btn:disabled, .btn[aria-busy="true"] { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* ---- Fields ---- */
+.field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.field__label { font-size: 1rem; font-weight: 600; }
+.field__input {
+  min-height: var(--tap); padding: 13px 16px; font: inherit; color: var(--ink);
+  background: #fff; border: 2px solid var(--nhs-mid-grey); border-radius: var(--radius-sm);
+}
+.field__input:hover { border-color: var(--nhs-grey-1); }
+.field__input:focus { border-color: var(--nhs-blue); }
+.devform__note { font-size: .95rem; color: var(--ink-soft); margin-bottom: 14px; }
+
+/* ---- Top bar ---- */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding-bottom: 18px; border-bottom: 1px solid var(--line);
+}
+
+.console__title { font-size: 1.7rem; margin: 24px 0 8px; }
+.console__lead { color: var(--ink-soft); margin-bottom: 22px; }
+.empty { color: var(--ink-soft); padding: 18px; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); }
+
+/* ---- Worklist ---- */
+.worklist { list-style: none; display: flex; flex-direction: column; gap: 14px; }
+.wl-item {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px;
+  background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 18px 20px; border-left: 4px solid var(--nhs-warm-yellow);
+}
+.wl-item__proc { font-weight: 700; font-size: 1.125rem; }
+.wl-item__meta { color: var(--ink-soft); font-size: .95rem; margin-top: 4px; }
+.wl-item__meta code { background: var(--nhs-pale-grey); padding: 1px 6px; border-radius: 4px; }
+.wl-item__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.wl-item__actions .btn { width: auto; }
+
+/* ---- Panels ---- */
+.panel { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 26px 24px; margin-top: 30px; }
+.panel__title { font-size: 1.3rem; margin-bottom: 8px; }
+.panel__lead { color: var(--ink-soft); margin-bottom: 18px; }
+.proxy-grid { display: grid; grid-template-columns: 1fr; gap: 4px 18px; }
+@media (min-width: 640px) { .proxy-grid { grid-template-columns: 1fr 1fr 1fr; } }
+.proxy-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
+.proxy-actions .btn { width: auto; }
+
+/* ---- Messages ---- */
+.msg, .error { margin-top: 14px; padding: 12px 16px; border-radius: var(--radius-sm); font-weight: 600; }
+.msg[data-kind="ok"] { background: #E6F3EC; color: var(--nhs-green); }
+.msg[data-kind="error"], .error { background: #FBE9E8; color: var(--nhs-red); }
+
+/* ---- Reduced motion / forced colors ---- */
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (forced-colors: active) {
+  .btn { border: 1px solid; }
+  :where(a, button, input, summary, [tabindex]):focus-visible { outline: 3px solid Highlight; }
+}
+```
+
+---
+
+
+## `staff/vercel.json`
+
+```json
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains; preload"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "geolocation=(), microphone=(), camera=(), payment=(), usb=(), interest-cohort=()"
+        },
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin"
+        },
+        {
+          "key": "Cross-Origin-Resource-Policy",
+          "value": "same-origin"
+        }
+      ]
+    }
+  ]
+}
 ```

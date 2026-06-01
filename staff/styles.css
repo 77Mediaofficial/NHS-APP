@@ -1,0 +1,138 @@
+/* =========================================================================
+   NHS Staff Console — styles.css
+   Built to ALIGN WITH the NHS Digital Service Manual + WCAG 2.2 AA (same palette
+   + tokens as the patient portal). Self-contained (separate Vercel deploy, so no
+   cross-directory @import). Light-only. Logo is a placeholder; not NHS-accredited.
+   Contrast ratios noted are developer-measured vs AA — confirm in a formal audit.
+   ========================================================================= */
+:root {
+  --nhs-blue: #005EB8; --nhs-dark-blue: #003087; --nhs-black: #212B32;
+  --nhs-grey-1: #4C6272; --nhs-pale-grey: #E8EDEE; --nhs-mid-grey: #AEB7BD;
+  --nhs-white: #FFFFFF; --nhs-green: #007F3B; --nhs-red: #DA291C; --nhs-yellow: #FFEB3B;
+  --nhs-warm-yellow: #FFB81C;
+  --ink: var(--nhs-black); --ink-soft: var(--nhs-grey-1); --line: #D8DDE0;
+  --surface: var(--nhs-white); --canvas: var(--nhs-pale-grey);
+  --primary: var(--nhs-blue); --primary-press: var(--nhs-dark-blue); --focus: var(--nhs-yellow);
+  --shadow: 0 1px 2px rgba(33,43,50,.06), 0 6px 18px rgba(33,43,50,.08);
+  --radius: 8px; --radius-sm: 6px; --tap: 48px;
+  --ease: cubic-bezier(.2,.7,.2,1);
+  --font: "Inter", Arial, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, sans-serif;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
+[hidden] { display: none !important; }
+
+body {
+  font-family: var(--font); color: var(--ink); background: var(--canvas);
+  line-height: 1.55; min-height: 100svh; -webkit-font-smoothing: antialiased;
+}
+
+/* ---- Accessibility primitives ---- */
+.skip-link {
+  position: fixed; top: -120px; left: 12px; z-index: 100; padding: 12px 16px;
+  background: var(--nhs-black); color: #fff; border-radius: var(--radius-sm);
+  text-decoration: none; transition: top .15s var(--ease);
+}
+.skip-link:focus-visible { top: 12px; }
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--focus); outline-offset: 2px;
+  box-shadow: 0 0 0 5px var(--nhs-black); border-radius: var(--radius-sm);
+}
+
+/* ---- Demo banner (mock-auth honesty) ---- */
+.devbanner {
+  background: #FFF4D6; border-bottom: 2px solid var(--nhs-warm-yellow);
+  color: #3d2f00; padding: 10px 20px; font-size: .95rem; text-align: center;
+}
+
+/* ---- Layout ---- */
+.stage { max-width: 860px; margin: 0 auto; padding: 28px 20px 64px; }
+
+.card {
+  background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 32px 28px; margin-top: 28px;
+}
+.login { max-width: 480px; }
+
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand--inline { margin: 0; }
+.brand__mark { color: var(--nhs-blue); width: 80px; }
+.brand__mark--sm { width: 56px; }
+.brand__mark svg { width: 100%; height: auto; display: block; }
+.brand__trust, .topbar__scope { font-weight: 600; color: var(--ink-soft); }
+
+.headline { font-size: 1.9rem; line-height: 1.15; margin: 18px 0 10px; }
+.lede { color: var(--ink-soft); font-size: 1.0625rem; margin-bottom: 22px; }
+
+/* ---- Buttons ---- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: var(--tap); padding: 12px 20px; border: 0; border-radius: var(--radius-sm);
+  font: inherit; font-weight: 600; font-size: 1.0625rem; cursor: pointer;
+  transition: background .15s var(--ease), transform .05s var(--ease);
+}
+.btn--primary { background: var(--primary); color: #fff; box-shadow: var(--shadow); }
+.btn--primary:hover { background: var(--primary-press); }
+.btn--ghost { background: #fff; color: var(--nhs-blue); border: 2px solid var(--nhs-blue); }
+.btn--ghost:hover { background: #eef4fb; }
+.btn--danger { background: var(--nhs-red); color: #fff; }     /* white-on-red ≈ 4.8:1 (AA) */
+.btn--danger:hover { background: #b71f14; }
+.btn:active { transform: scale(.99); }
+.btn:disabled, .btn[aria-busy="true"] { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* ---- Fields ---- */
+.field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.field__label { font-size: 1rem; font-weight: 600; }
+.field__input {
+  min-height: var(--tap); padding: 13px 16px; font: inherit; color: var(--ink);
+  background: #fff; border: 2px solid var(--nhs-mid-grey); border-radius: var(--radius-sm);
+}
+.field__input:hover { border-color: var(--nhs-grey-1); }
+.field__input:focus { border-color: var(--nhs-blue); }
+.devform__note { font-size: .95rem; color: var(--ink-soft); margin-bottom: 14px; }
+
+/* ---- Top bar ---- */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding-bottom: 18px; border-bottom: 1px solid var(--line);
+}
+
+.console__title { font-size: 1.7rem; margin: 24px 0 8px; }
+.console__lead { color: var(--ink-soft); margin-bottom: 22px; }
+.empty { color: var(--ink-soft); padding: 18px; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); }
+
+/* ---- Worklist ---- */
+.worklist { list-style: none; display: flex; flex-direction: column; gap: 14px; }
+.wl-item {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px;
+  background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 18px 20px; border-left: 4px solid var(--nhs-warm-yellow);
+}
+.wl-item__proc { font-weight: 700; font-size: 1.125rem; }
+.wl-item__meta { color: var(--ink-soft); font-size: .95rem; margin-top: 4px; }
+.wl-item__meta code { background: var(--nhs-pale-grey); padding: 1px 6px; border-radius: 4px; }
+.wl-item__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.wl-item__actions .btn { width: auto; }
+
+/* ---- Panels ---- */
+.panel { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 26px 24px; margin-top: 30px; }
+.panel__title { font-size: 1.3rem; margin-bottom: 8px; }
+.panel__lead { color: var(--ink-soft); margin-bottom: 18px; }
+.proxy-grid { display: grid; grid-template-columns: 1fr; gap: 4px 18px; }
+@media (min-width: 640px) { .proxy-grid { grid-template-columns: 1fr 1fr 1fr; } }
+.proxy-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
+.proxy-actions .btn { width: auto; }
+
+/* ---- Messages ---- */
+.msg, .error { margin-top: 14px; padding: 12px 16px; border-radius: var(--radius-sm); font-weight: 600; }
+.msg[data-kind="ok"] { background: #E6F3EC; color: var(--nhs-green); }
+.msg[data-kind="error"], .error { background: #FBE9E8; color: var(--nhs-red); }
+
+/* ---- Reduced motion / forced colors ---- */
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (forced-colors: active) {
+  .btn { border: 1px solid; }
+  :where(a, button, input, summary, [tabindex]):focus-visible { outline: 3px solid Highlight; }
+}

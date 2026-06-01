@@ -18,6 +18,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "5700", "--directory", "portal"],
       "port": 5700
+    },
+    {
+      "name": "staff",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5800", "--directory", "staff"],
+      "port": 5800
     }
   ]
 }

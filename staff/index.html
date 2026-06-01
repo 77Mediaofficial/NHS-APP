@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="color-scheme" content="light" />
+  <title>Staff Console — Waitlist Clinical Review (NHS)</title>
+  <meta name="description" content="Staff console: review pending waitlist cancellations and manage proxy access." />
+
+  <!-- CSP: defence-in-depth; authoritative policy is the HTTP header in staff/vercel.json
+       (kept byte-aligned). connect-src allows Supabase REST + Auth + Realtime (wss). -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests" />
+
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="styles.css?v=20260601" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <!-- DEV/MOCK BANNER: this console uses mock auth for local demo. In production it is
+       replaced by real staff authentication carrying the hospital_id JWT claim. -->
+  <p class="devbanner" role="note">
+    Demo console — <strong>mock staff sign-in</strong>. Production requires real NHS
+    staff authentication (Care Identity / hospital SSO) with a verified hospital scope.
+  </p>
+
+  <main id="main" class="stage">
+
+    <!-- ===== STATE A — signed out ===== -->
+    <section id="login" class="card login" aria-labelledby="loginTitle" hidden>
+      <div class="brand">
+        <div class="brand__mark" aria-hidden="true">
+          <svg viewBox="0 0 80 32" role="img" focusable="false">
+            <rect width="80" height="32" rx="4" fill="currentColor" />
+            <text x="40" y="22" text-anchor="middle" font-family="Arial, sans-serif"
+                  font-weight="700" font-size="16" fill="#ffffff" letter-spacing="0.5">NHS</text>
+          </svg>
+        </div>
+        <p class="brand__trust">Staff Console</p>
+      </div>
+      <h1 id="loginTitle" class="headline">Waitlist clinical review</h1>
+      <p class="lede">Sign in to review patient responses that need clinical action and to manage proxy access.</p>
+
+      <form id="staffSignin" class="devform">
+        <p class="devform__note">Mock staff sign-in (local demo only — no real credentials stored)</p>
+        <label class="field">
+          <span class="field__label">Staff email</span>
+          <input id="staffEmail" class="field__input" type="email" autocomplete="username" inputmode="email" required />
+        </label>
+        <label class="field">
+          <span class="field__label">Password</span>
+          <input id="staffPassword" class="field__input" type="password" autocomplete="current-password" required />
+        </label>
+        <button id="staffSubmit" class="btn btn--primary" type="submit"><span class="btn__label">Sign in</span></button>
+      </form>
+      <p id="loginError" class="error" role="alert" hidden></p>
+    </section>
+
+    <!-- ===== STATE B — signed in ===== -->
+    <section id="console" class="console" aria-labelledby="consoleTitle" hidden>
+      <header class="topbar">
+        <div class="brand brand--inline">
+          <div class="brand__mark brand__mark--sm" aria-hidden="true">
+            <svg viewBox="0 0 80 32" role="img" focusable="false">
+              <rect width="80" height="32" rx="4" fill="currentColor" />
+              <text x="40" y="22" text-anchor="middle" font-family="Arial, sans-serif"
+                    font-weight="700" font-size="16" fill="#ffffff" letter-spacing="0.5">NHS</text>
+            </svg>
+          </div>
+          <span id="hospitalLabel" class="topbar__scope">—</span>
+        </div>
+        <button id="signOut" class="btn btn--ghost" type="button">Sign out</button>
+      </header>
+
+      <h1 id="consoleTitle" class="console__title">Clinical review worklist</h1>
+      <p class="console__lead">Patients who tapped “I no longer need this”. Each entry is held in a
+        <strong>reversible</strong> state until you confirm or reinstate it — nothing was auto-cancelled.</p>
+
+      <p id="worklistEmpty" class="empty" hidden>No entries are awaiting review.</p>
+
+      <ul id="worklist" class="worklist" aria-label="Entries awaiting clinical review"></ul>
+
+      <!-- Proxy management -->
+      <section class="panel" aria-labelledby="proxyTitle">
+        <h2 id="proxyTitle" class="panel__title">Proxy access</h2>
+        <p class="panel__lead">Grant a verified carer/parent access to a patient’s record, or revoke it.
+          Granting requires recorded Caldicott consent + identity verification (out of band).</p>
+        <div class="proxy-grid">
+          <label class="field"><span class="field__label">Patient (subject) user ID</span>
+            <input id="pxSubject" class="field__input" type="text" inputmode="text" placeholder="uuid" /></label>
+          <label class="field"><span class="field__label">Proxy user ID</span>
+            <input id="pxProxy" class="field__input" type="text" inputmode="text" placeholder="uuid" /></label>
+          <label class="field"><span class="field__label">Relationship</span>
+            <input id="pxRel" class="field__input" type="text" placeholder="parent / carer / LPA" /></label>
+        </div>
+        <div class="proxy-actions">
+          <button id="pxGrant" class="btn btn--primary" type="button">Grant access</button>
+          <button id="pxRevoke" class="btn btn--ghost" type="button">Revoke access</button>
+        </div>
+        <p id="proxyMsg" class="msg" role="status" hidden></p>
+      </section>
+
+      <p id="consoleError" class="error" role="alert" hidden></p>
+    </section>
+  </main>
+
+  <script
+    src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.106.2"
+    integrity="sha384-4Cjkyy4cE1EgIS0C+Y3xzGmJ2noQFRRU91yKAW8IxtPfVtbQXPMqadSc3sYnjwou"
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"></script>
+  <script src="env.js"></script>
+  <script src="app.js?v=20260601" defer></script>
+</body>
+</html>

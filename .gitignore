@@ -19,6 +19,7 @@
 # never be pushed by accident.
 frontend/env.js
 portal/env.js
+staff/env.js
 
 # ---- Supabase local state --------------------------------------------------
 .supabase/

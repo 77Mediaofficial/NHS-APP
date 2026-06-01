@@ -329,16 +329,19 @@
   ["pointerdown", "keydown", "touchstart", "scroll"].forEach((evt) =>
     window.addEventListener(evt, onUserActivity, { passive: true }));
 
-  // ---- Proxy view (MOCK) --------------------------------------------------
-  // Real proxy access requires a verified proxy relationship + its own RLS and
-  // Caldicott-approved consent. This toggle only demonstrates the UX; it does
-  // NOT fetch anyone else's data.
+  // ---- Proxy view (UI still a MOCK; backend scaffold now exists) ----------
+  // The SERVER-SIDE foundation for real proxy access now exists (migration
+  // 20260601030000: patient_proxies + auth.has_proxy_access() + pol_entries_proxy_select
+  // + staff-gated grant/revoke RPCs). But this CLIENT toggle is still a UX demo: it does
+  // NOT switch identity or fetch anyone else's data, because (a) no proxy relationships
+  // are granted (Caldicott consent is a 👤 governance step) and (b) no subject-picker UI
+  // is wired. Keep the banner honest until a real grant + picker exist.
   if (els.proxyToggle) {
     els.proxyToggle.addEventListener("click", () => {
       const on = els.proxyToggle.getAttribute("aria-checked") !== "true";
       els.proxyToggle.setAttribute("aria-checked", String(on));
       if (on) {
-        setError(els.proxyBanner, "Demo: proxy view is a placeholder. Real proxy access requires verified authorisation and is not enabled.");
+        setError(els.proxyBanner, "Demo only: proxy view is not active. Viewing someone else’s record requires verified, consented authorisation set up by the hospital — no other person’s data is shown here.");
       } else {
         setError(els.proxyBanner, "");
       }

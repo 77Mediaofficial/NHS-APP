@@ -257,9 +257,15 @@ Five-pillar routing (where each pillar is evidenced in this repo):
 - ⚠️ **Mock NHS Login.** The "Sign in with NHS Login" button simulates OIDC; for local testing it
   reveals a form where the tester types their own credentials. **No credentials are stored in the repo.**
   Production must swap in the real NHS Login OIDC provider (`signInWithOAuth`) — 👤 integration + assurance.
-- 🚫👤 **Proxy view is a MOCK.** Caring-for-a-dependent access shows a placeholder banner only and fetches
-  no one else's data. Real proxy access requires a verified proxy relationship, its own RLS, and
-  **Caldicott-approved consent** (see §3).
+- ⚠️👤 **Proxy access — server-side scaffold now in code; client still a MOCK.** Backend foundation built
+  (`20260601030000_proxy_access_scaffold.sql`): a `patient_proxies` relationship table (active + consented +
+  time-bounded), `auth.has_proxy_access()` (fail-closed predicate), a third permissive `pol_entries_proxy_select`
+  policy that OR-combines with patient-self + admin reads, and **staff-gated** `grant_proxy_access` (requires the
+  `hospital_id` JWT claim — a patient cannot self-grant) / `revoke_proxy_access` (subject/proxy/staff). Ships with
+  **zero relationships granted**, so it changes no access by default. The portal CLIENT toggle is still a UX demo
+  (no identity switch, no subject-picker, fetches no one else's data). 🚫👤 **Still required:** Caldicott-approved
+  CONSENT + identity verification of both parties (the table records a decision, it does not make it), lawful basis
+  for under-16s/incapacity, and a staff grant/revoke UI. *Code-reviewed, not executed.*
 - ✅ **No secrets in client / CSP / SRI.** Only the public URL + anon key (`portal/env.js`, gitignored);
   defence-in-depth CSP meta; SRI-pinned `supabase-js@2.106.2`.
 - ✅ **Accessibility (WCAG 2.2 AA aim).** Elderly-friendly: larger base type, ≥56px touch targets,
@@ -461,3 +467,20 @@ _Last reviewed: 2026-06-01._
 - Honesty note: tamper-**evident**, not tamper-**proof** — detection, not prevention; a DB admin could rewrite
   the entire chain. External WORM/notarisation of the tail hash is a 👤 Trust operational step. Code-reviewed,
   **NOT** executed; not a compliance claim.
+
+**Changelog — 2026-06-01 (proxy access — server-side scaffold):**
+- §10 — Added `20260601030000_proxy_access_scaffold.sql`: the SERVER-SIDE foundation for verified proxy access
+  (caring for a dependent), so "proxy" can never be a client-asserted claim. `patient_proxies` (active +
+  consented + time-bounded, `proxy<>subject`, unique pair); `auth.has_proxy_access()` STABLE fail-closed
+  predicate; `pol_entries_proxy_select` third permissive SELECT policy (OR-combines with patient-self + admin);
+  `grant_proxy_access` (**staff-gated** via the `hospital_id` claim → a patient cannot self-grant) and
+  `revoke_proxy_access` (subject/proxy/staff). Proxy mock `🚫👤 → ⚠️👤`.
+- Security back-check during build: caught + closed a self-grant hole — without the `hospital_id` gate any
+  authenticated user could have granted themselves access to another record by passing `p_proxy = own uid`.
+  Now fail-closed (no staff claim → `NOT_AUTHORISED_TO_GRANT_PROXY`). Ships with zero relationships → no access
+  change by default.
+- `portal/app.js`: comment + banner updated to honestly say the client is still a UX demo (no identity switch,
+  no subject-picker) while the backend foundation now exists. Cache-bust `app.js?v=20260601b`.
+- 🚫👤 Still required: Caldicott-approved consent + identity verification of both parties; lawful basis for
+  under-16s / incapacity; a staff grant/revoke UI (shared with the §1 staff-auth follow-on).
+- Honesty note: code-reviewed, **NOT** executed (no live Postgres this session); not a compliance claim.

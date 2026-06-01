@@ -178,12 +178,16 @@ Five-pillar routing (where each pillar is evidenced in this repo):
 - ✅ **Token expiry** — 7-day default in `waitlist_tokens.expires_at`.
 - ✅ **Least privilege** — `anon` has EXECUTE on the RPC only; tables locked by forced RLS.
 - ✅ **SECURITY DEFINER hardened** — `SET search_path = public`.
-- ⚠️ **Audit trail** — who/when responded; ensure tamper-evidence and **no token↔PII
-  correlation in Supabase request logs**. *Partial:* clinician **resolutions** are now recorded in an
-  append-only `cancellation_reviews` ledger (reviewed_by + before/after + note; no UPDATE/DELETE policy,
-  so immutable from the app). Still ⚠️: this is immutable-by-RLS, **not** cryptographically tamper-evident
-  (hash-chaining is later hardening); and the **patient-response** side (`validation_responses`) still has
-  no tamper-evident chain. No token↔PII correlation to confirm in request logs.
+- ⚠️ **Audit trail** — who/when responded + tamper-evidence + **no token↔PII correlation in request logs**.
+  *Now substantially built:* **both** append-only ledgers — clinician `cancellation_reviews` (reviewed_by +
+  before/after + note) **and** patient `validation_responses` — are immutable-by-RLS (no UPDATE/DELETE policy)
+  **and cryptographically hash-chained** (`20260601020000_audit_hash_chain.sql`): a BEFORE INSERT trigger sets
+  `row_hash = sha256(prev_hash || business-columns)` (PG15 core sha256, no extension), and `verify_audit_chain()`
+  re-walks a chain to DETECT any later edit/deletion — including one that bypasses RLS via direct DB access.
+  **Honest residual ⚠️:** tamper-*evident*, not tamper-*proof* (a DB admin could rewrite the whole chain
+  consistently) — closing that needs periodic export of the tail `row_hash` to external WORM/notarisation
+  (👤 Trust operational step). Token↔PII non-correlation in Supabase request logs still to confirm at deploy.
+  *Code-reviewed, not executed (no live DB this session).*
 - ⚠️ **No secrets in client** — anon key is public-by-design ✅; confirm no service-role key
   ever reaches `frontend/`. Runtime config is isolated to `frontend/env.js` (`window.__ENV`, public
   URL + anon key only; `env.example.js` documents it). The service-role key stays server-side
@@ -441,3 +445,19 @@ _Last reviewed: 2026-06-01._
   **CSO sign-off + Hazard Log / CSCR** entry for the workflow.
 - Honesty note: code-reviewed, **NOT** executed (no live Postgres this session); no frontend surface to preview
   (staff UI is the documented follow-on). Not a compliance claim — the clinical safety case remains 👤 with the CSO.
+
+**Changelog — 2026-06-01 (tamper-evident audit hash chains):**
+- §6 — Added `20260601020000_audit_hash_chain.sql`: SHA-256 hash-chaining on BOTH append-only ledgers
+  (`cancellation_reviews`, `validation_responses`). A generic `audit_chain_append()` BEFORE INSERT trigger sets
+  `prev_hash` + `row_hash = sha256(prev_hash || canonical-business-columns)`; appends are advisory-lock serialised
+  per table to prevent chain forks. `verify_audit_chain(table)` re-walks a chain and returns
+  `{rows, intact, first_broken_seq}` so alteration/deletion — even via direct DB access that bypasses RLS — is
+  DETECTABLE. Uses PG15 **core** `sha256(bytea)` → no pgcrypto/extension dependency (lower apply risk).
+- Design note: the trigger fires automatically, so the clinical-safety RPCs (`submit_validation_response`,
+  `resolve_cancellation`) are UNCHANGED. Trigger and verifier hash the identical canonical payload
+  (`to_jsonb(row)` minus `seq`/`prev_hash`/`row_hash`); `id`/`created_at` DEFAULTs resolve before the BEFORE
+  INSERT trigger, so trigger-time and persisted rows hash the same. Updated the stale "later hardening" comment
+  in the clinical-review migration to point here.
+- Honesty note: tamper-**evident**, not tamper-**proof** — detection, not prevention; a DB admin could rewrite
+  the entire chain. External WORM/notarisation of the tail hash is a 👤 Trust operational step. Code-reviewed,
+  **NOT** executed; not a compliance claim.

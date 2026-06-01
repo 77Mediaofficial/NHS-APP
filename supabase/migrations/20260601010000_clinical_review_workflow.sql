@@ -35,8 +35,8 @@
 -- Tamper-evidence aim (§6): every resolution is recorded with the acting clinician
 -- (auth.uid()), the before/after status, and an optional clinical note. There are
 -- intentionally NO UPDATE/DELETE policies, so the app cannot rewrite history.
--- (True cryptographic tamper-evidence — e.g. hash chaining — is a later hardening;
--- this is an immutable-by-RLS ledger, documented honestly as such.)
+-- (Cryptographic tamper-evidence — SHA-256 hash chaining — is ADDED on top of this
+-- immutable-by-RLS ledger by 20260601020000_audit_hash_chain.sql.)
 CREATE TABLE IF NOT EXISTS cancellation_reviews (
     id                 UUID         NOT NULL DEFAULT gen_random_uuid(),
     waitlist_entry_id  UUID         NOT NULL,

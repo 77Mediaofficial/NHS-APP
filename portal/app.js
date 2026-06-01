@@ -34,6 +34,17 @@
   // No backend configured → local preview mode (mock session, sample data).
   const devMock = !db;
 
+  // ---- NHS Login OIDC provider (PUBLIC config; credentials live in Supabase) ----
+  // When the backend is configured AND a provider name is set in env, the "Sign in
+  // with NHS Login" button starts the REAL OIDC flow (db.auth.signInWithOAuth).
+  // The provider itself (client id/secret, NHS Login issuer URLs, scopes incl.
+  // 'nhs_number') is registered in the Supabase dashboard — NEVER in this repo.
+  // Empty/absent → the button falls back to the local mock credential form.
+  // 👤 NHS Login integration + assurance (real client registration, P9 identity
+  // proofing, claim mapping to nhs_number/identity_proofing_level) is a Trust step.
+  const NHS_OIDC_PROVIDER = (window.__ENV?.NHS_OIDC_PROVIDER || "").trim();
+  const useRealOidc = !devMock && NHS_OIDC_PROVIDER !== "";
+
   // ---- Session hygiene: idle auto sign-out config -------------------------
   // Patient health data must not stay open on an unattended/shared device. After
   // IDLE_LIMIT_MS of no interaction we warn, then sign the patient out. Configurable
@@ -268,16 +279,38 @@
   }
 
   // ---- Login interactions -------------------------------------------------
-  // "Sign in with NHS Login": production -> db.auth.signInWithOAuth({ provider: <NHS OIDC> }).
-  // Here it reveals the mock credential form (no creds are stored in the repo).
+  // "Sign in with NHS Login":
+  //   • Real OIDC (backend configured + NHS_OIDC_PROVIDER set) → redirect to the NHS
+  //     Login provider via Supabase Auth. On return, detectSessionInUrl + the
+  //     onAuthStateChange handler route to the dashboard.
+  //   • Otherwise → reveal the local mock credential form (no creds stored in repo).
+  async function startNhsLogin() {
+    pendingLoginNotice = "";
+    setError(els.loginError, "");
+    if (useRealOidc) {
+      setBusy(els.nhsLogin, true);
+      try {
+        const { error } = await db.auth.signInWithOAuth({
+          provider: NHS_OIDC_PROVIDER,
+          options: { redirectTo: window.location.origin + window.location.pathname },
+        });
+        if (error) throw error;
+        // Success navigates away to the provider; nothing else to do here.
+      } catch (err) {
+        console.error("NHS Login start failed:", err);
+        setError(els.loginError, "We couldn’t start NHS Login right now. Please try again.");
+        setBusy(els.nhsLogin, false);
+      }
+      return;
+    }
+    // Mock path (local dev / no provider configured).
+    hide(els.nhsLogin);
+    show(els.devSignin);
+    if (els.devEmail) els.devEmail.focus();
+  }
+
   if (els.nhsLogin) {
-    els.nhsLogin.addEventListener("click", () => {
-      pendingLoginNotice = "";
-      setError(els.loginError, "");
-      hide(els.nhsLogin);
-      show(els.devSignin);
-      if (els.devEmail) els.devEmail.focus();
-    });
+    els.nhsLogin.addEventListener("click", startNhsLogin);
   }
 
   if (els.devSignin) {

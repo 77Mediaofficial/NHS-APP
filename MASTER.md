@@ -441,9 +441,15 @@ Five-pillar routing (where each pillar is evidenced in this repo):
   where linking runs (post-login/access-token hook recommended over the client calling the RPC); (c) the Trust's
   ingest/PAS must populate `waitlist_entries.nhs_number`. Until (a)+(b) align and rows carry a number, every row
   stays NULL → portal correctly empty.
-- ⚠️ **Mock NHS Login.** The "Sign in with NHS Login" button simulates OIDC; for local testing it
-  reveals a form where the tester types their own credentials. **No credentials are stored in the repo.**
-  Production must swap in the real NHS Login OIDC provider (`signInWithOAuth`) — 👤 integration + assurance.
+- ⚠️👤 **NHS Login — real OIDC path now in code (config-activated); mock retained for dev.** The "Sign in
+  with NHS Login" button now calls the **real** `db.auth.signInWithOAuth({ provider: NHS_OIDC_PROVIDER })`
+  whenever the backend is configured **and** `window.__ENV.NHS_OIDC_PROVIDER` is set; otherwise it falls back to
+  the local mock credential form. The provider (client id/secret, NHS Login issuer URLs, scopes incl.
+  `nhs_number`/P9 proofing) is registered in the **Supabase dashboard — never in the repo**; `env.example.js`
+  documents the public provider-name knob only. Verified live: with no provider (dev-mock) the button still
+  reveals the mock form and the full login→dashboard flow works. 👤 **Still required:** real NHS Login client
+  registration + identity-proofing (P9) + claim mapping, and assurance — only the Trust can do this. **No
+  credentials are stored in the repo.**
 - ⚠️👤 **Proxy access — server-side scaffold now in code; client still a MOCK.** Backend foundation built
   (`20260601030000_proxy_access_scaffold.sql`): a `patient_proxies` relationship table (active + consented +
   time-bounded), `auth.has_proxy_access()` (fail-closed predicate), a third permissive `pol_entries_proxy_select`
@@ -671,6 +677,21 @@ _Last reviewed: 2026-06-01._
 - 🚫👤 Still required: Caldicott-approved consent + identity verification of both parties; lawful basis for
   under-16s / incapacity; a staff grant/revoke UI (shared with the §1 staff-auth follow-on).
 - Honesty note: code-reviewed, **NOT** executed (no live Postgres this session); not a compliance claim.
+
+**Changelog — 2026-06-01 (NHS Login OIDC — code-side wiring):**
+- §10 — The portal's "Sign in with NHS Login" button now starts the REAL OIDC flow
+  (`db.auth.signInWithOAuth({ provider, options:{ redirectTo } })`) when the backend is configured AND
+  `window.__ENV.NHS_OIDC_PROVIDER` is set; otherwise it falls back to the local mock credential form. New
+  `useRealOidc` config gate + `startNhsLogin()` handler in `portal/app.js`; `env.example.js` documents the
+  public provider-name knob (the OIDC client id/secret + NHS Login issuer/scopes live in the Supabase dashboard,
+  **never in the repo**). Mock-NHS-Login item `⚠️ → ⚠️👤` (code path real; integration is the Trust step).
+- Verified live (dev-mock, no provider): the button still reveals the mock form, focus moves to email, and the
+  full login → dashboard flow works (greeting renders); no console errors. Cache-bust `app.js?v=20260601c`.
+- 👤 Still required (only the Trust can): real NHS Login client registration, P9 identity proofing, claim mapping
+  (`nhs_number`, `identity_proofing_level`), and security assurance. The identity-matcher (`link_my_waitlist_record`,
+  2026-06-01) consumes exactly those claims once they flow.
+- Honesty note: not a compliance claim; the OAuth redirect path itself is code-reviewed but unexercised without a
+  registered provider (no live OIDC this session).
 ```
 
 ---
@@ -1788,6 +1809,17 @@ body {
   // No backend configured → local preview mode (mock session, sample data).
   const devMock = !db;
 
+  // ---- NHS Login OIDC provider (PUBLIC config; credentials live in Supabase) ----
+  // When the backend is configured AND a provider name is set in env, the "Sign in
+  // with NHS Login" button starts the REAL OIDC flow (db.auth.signInWithOAuth).
+  // The provider itself (client id/secret, NHS Login issuer URLs, scopes incl.
+  // 'nhs_number') is registered in the Supabase dashboard — NEVER in this repo.
+  // Empty/absent → the button falls back to the local mock credential form.
+  // 👤 NHS Login integration + assurance (real client registration, P9 identity
+  // proofing, claim mapping to nhs_number/identity_proofing_level) is a Trust step.
+  const NHS_OIDC_PROVIDER = (window.__ENV?.NHS_OIDC_PROVIDER || "").trim();
+  const useRealOidc = !devMock && NHS_OIDC_PROVIDER !== "";
+
   // ---- Session hygiene: idle auto sign-out config -------------------------
   // Patient health data must not stay open on an unattended/shared device. After
   // IDLE_LIMIT_MS of no interaction we warn, then sign the patient out. Configurable
@@ -2022,16 +2054,38 @@ body {
   }
 
   // ---- Login interactions -------------------------------------------------
-  // "Sign in with NHS Login": production -> db.auth.signInWithOAuth({ provider: <NHS OIDC> }).
-  // Here it reveals the mock credential form (no creds are stored in the repo).
+  // "Sign in with NHS Login":
+  //   • Real OIDC (backend configured + NHS_OIDC_PROVIDER set) → redirect to the NHS
+  //     Login provider via Supabase Auth. On return, detectSessionInUrl + the
+  //     onAuthStateChange handler route to the dashboard.
+  //   • Otherwise → reveal the local mock credential form (no creds stored in repo).
+  async function startNhsLogin() {
+    pendingLoginNotice = "";
+    setError(els.loginError, "");
+    if (useRealOidc) {
+      setBusy(els.nhsLogin, true);
+      try {
+        const { error } = await db.auth.signInWithOAuth({
+          provider: NHS_OIDC_PROVIDER,
+          options: { redirectTo: window.location.origin + window.location.pathname },
+        });
+        if (error) throw error;
+        // Success navigates away to the provider; nothing else to do here.
+      } catch (err) {
+        console.error("NHS Login start failed:", err);
+        setError(els.loginError, "We couldn’t start NHS Login right now. Please try again.");
+        setBusy(els.nhsLogin, false);
+      }
+      return;
+    }
+    // Mock path (local dev / no provider configured).
+    hide(els.nhsLogin);
+    show(els.devSignin);
+    if (els.devEmail) els.devEmail.focus();
+  }
+
   if (els.nhsLogin) {
-    els.nhsLogin.addEventListener("click", () => {
-      pendingLoginNotice = "";
-      setError(els.loginError, "");
-      hide(els.nhsLogin);
-      show(els.devSignin);
-      if (els.devEmail) els.devEmail.focus();
-    });
+    els.nhsLogin.addEventListener("click", startNhsLogin);
   }
 
   if (els.devSignin) {
@@ -2120,10 +2174,19 @@ body {
        under the user's JWT and Row Level Security isolates their data.
      • NEVER put the service-role key (or any secret) here — it would be
        exposed to every visitor. Secrets live only in server-side functions.
+     • NHS_OIDC_PROVIDER is just the PROVIDER NAME configured in the Supabase
+       dashboard (Authentication → Providers). The client id/secret, NHS Login
+       issuer URLs and scopes (incl. nhs_number) are registered THERE, never here.
+       Leave it empty/omitted to use the local mock credential form instead.
    ========================================================================= */
 window.__ENV = {
   SUPABASE_URL: "https://YOUR-PROJECT-REF.supabase.co",
   SUPABASE_ANON_KEY: "YOUR-PUBLIC-ANON-KEY",
+
+  // Optional: name of the NHS Login OIDC provider configured in Supabase Auth.
+  // When set (and the backend is configured), the "Sign in with NHS Login" button
+  // starts the real OIDC flow. Empty/omitted → local mock sign-in form.
+  NHS_OIDC_PROVIDER: "",
 };
 ```
 
@@ -2321,7 +2384,7 @@ window.__ENV = {
     referrerpolicy="no-referrer"></script>
   <!-- Runtime config: PUBLIC url + anon key only (env.js is gitignored; see env.example.js). -->
   <script src="env.js"></script>
-  <script src="app.js?v=20260601b" defer></script>
+  <script src="app.js?v=20260601c" defer></script>
 </body>
 </html>
 ```

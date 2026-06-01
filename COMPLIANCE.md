@@ -54,6 +54,9 @@ start. **Do not describe as "compliant" at any score.**
 *Mandatory under the Health & Social Care Act for clinical software.*
 
 - 🚫👤 **Clinical Safety Officer assigned** and Hazard Log + Clinical Safety Case Report opened.
+  *Head-start:* a **pre-populated Hazard Log draft** (`governance/HAZARD-LOG-DRAFT.md`) captures HAZ-01..06 in
+  the DCB0129 format with the in-code mitigations filled in — but **all risk scores + the CSO sign-off are
+  `%%PLACEHOLDER%%`**. A draft is not an approved Safety Case; a registered CSO must own it. Status stays 🚫👤.
 - ⚠️ **HAZARD (mitigated in code — pending CSO review): instant irreversible auto-cancel.**
   Previously a single tap on *"I no longer need this"* set `status = 'CANCELLED'` outright.
   **Now mitigated by two independent layers:**
@@ -94,6 +97,10 @@ start. **Do not describe as "compliant" at any score.**
 
 ## 2. UK GDPR / DPA 2018 + DPIA 👤
 - 🚫👤 **DPIA completed and signed** before go-live (special-category health data).
+  *Head-start:* a **pre-populated DPIA draft** (`governance/DPIA-DRAFT.md`) describes the processing, both
+  data surfaces, the data categories/flow, minimisation evidence, and a risk register (R1..R7) pre-filled with
+  the in-code mitigations — but **lawful-basis determinations, risk scoring/acceptance, and all signatures are
+  `%%PLACEHOLDER%%`** for the DPO + Caldicott Guardian. A draft is not a completed DPIA. Status stays 🚫👤.
 - ✅ **Data minimisation in URL** — only a 128-bit UUID token; zero PII in the link.
 - ✅ **No PII in `waitlist_tokens` / `validation_responses`** — UUIDs + enum only.
 - ⚠️ **Lawful basis documented** (likely Art.6(1)(e) public task + Art.9(2)(h) health/care).
@@ -568,3 +575,14 @@ _Last reviewed: 2026-06-01._
   deferred to DEPLOYMENT.md §6).
 - Added an "Execution status" callout under the readiness snapshot so the code-reviewed-vs-executed boundary
   is unmissable. Still not a compliance claim — running these produces evidence, the Trust assesses it.
+
+**Changelog — 2026-06-01 (governance head-start drafts — DPIA + Hazard Log):**
+- §2 — Added `governance/DPIA-DRAFT.md`: a pre-populated DPIA capturing the processing description, both data
+  surfaces, data categories + flow, minimisation evidence, and a risk register (R1..R7) with in-code mitigations
+  filled in. **All lawful-basis calls, risk scores/acceptance and signatures are `%%PLACEHOLDER%%`** for the
+  DPO + Caldicott. DPIA item stays 🚫👤 — a draft is not a completed DPIA.
+- §1 — Added `governance/HAZARD-LOG-DRAFT.md`: HAZ-01..06 in the DCB0129 format with the in-code mitigations
+  documented. **All risk ratings + CSO sign-off are `%%PLACEHOLDER%%`.** Stays 🚫👤 — a registered CSO must own it.
+- Why drafts (not "done"): completing these is the legal responsibility of the DPO/Caldicott/CSO; an engineer
+  pre-filling the *factual/technical* parts accelerates them without crossing into decisions only those roles
+  may make. Both files carry a prominent "DRAFT — confers no compliance" banner, consistent with the honesty rule.

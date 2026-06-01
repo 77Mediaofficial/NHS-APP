@@ -9,7 +9,7 @@
 > gitignored `env.js` is excluded and only the `env.example.js` template appears.
 
 
-**41 files** in this bundle.
+**43 files** in this bundle.
 
 
 ## Contents
@@ -55,6 +55,8 @@
 - [`.gitignore`](#gitignore)
 - [`DEPLOYMENT.md`](#deployment-md)
 - [`SECURITY-INCIDENT.md`](#security-incident-md)
+- [`governance/DPIA-DRAFT.md`](#governance-dpia-draft-md)
+- [`governance/HAZARD-LOG-DRAFT.md`](#governance-hazard-log-draft-md)
 
 
 ---
@@ -244,6 +246,9 @@ start. **Do not describe as "compliant" at any score.**
 *Mandatory under the Health & Social Care Act for clinical software.*
 
 - 🚫👤 **Clinical Safety Officer assigned** and Hazard Log + Clinical Safety Case Report opened.
+  *Head-start:* a **pre-populated Hazard Log draft** (`governance/HAZARD-LOG-DRAFT.md`) captures HAZ-01..06 in
+  the DCB0129 format with the in-code mitigations filled in — but **all risk scores + the CSO sign-off are
+  `%%PLACEHOLDER%%`**. A draft is not an approved Safety Case; a registered CSO must own it. Status stays 🚫👤.
 - ⚠️ **HAZARD (mitigated in code — pending CSO review): instant irreversible auto-cancel.**
   Previously a single tap on *"I no longer need this"* set `status = 'CANCELLED'` outright.
   **Now mitigated by two independent layers:**
@@ -284,6 +289,10 @@ start. **Do not describe as "compliant" at any score.**
 
 ## 2. UK GDPR / DPA 2018 + DPIA 👤
 - 🚫👤 **DPIA completed and signed** before go-live (special-category health data).
+  *Head-start:* a **pre-populated DPIA draft** (`governance/DPIA-DRAFT.md`) describes the processing, both
+  data surfaces, the data categories/flow, minimisation evidence, and a risk register (R1..R7) pre-filled with
+  the in-code mitigations — but **lawful-basis determinations, risk scoring/acceptance, and all signatures are
+  `%%PLACEHOLDER%%`** for the DPO + Caldicott Guardian. A draft is not a completed DPIA. Status stays 🚫👤.
 - ✅ **Data minimisation in URL** — only a 128-bit UUID token; zero PII in the link.
 - ✅ **No PII in `waitlist_tokens` / `validation_responses`** — UUIDs + enum only.
 - ⚠️ **Lawful basis documented** (likely Art.6(1)(e) public task + Art.9(2)(h) health/care).
@@ -758,6 +767,17 @@ _Last reviewed: 2026-06-01._
   deferred to DEPLOYMENT.md §6).
 - Added an "Execution status" callout under the readiness snapshot so the code-reviewed-vs-executed boundary
   is unmissable. Still not a compliance claim — running these produces evidence, the Trust assesses it.
+
+**Changelog — 2026-06-01 (governance head-start drafts — DPIA + Hazard Log):**
+- §2 — Added `governance/DPIA-DRAFT.md`: a pre-populated DPIA capturing the processing description, both data
+  surfaces, data categories + flow, minimisation evidence, and a risk register (R1..R7) with in-code mitigations
+  filled in. **All lawful-basis calls, risk scores/acceptance and signatures are `%%PLACEHOLDER%%`** for the
+  DPO + Caldicott. DPIA item stays 🚫👤 — a draft is not a completed DPIA.
+- §1 — Added `governance/HAZARD-LOG-DRAFT.md`: HAZ-01..06 in the DCB0129 format with the in-code mitigations
+  documented. **All risk ratings + CSO sign-off are `%%PLACEHOLDER%%`.** Stays 🚫👤 — a registered CSO must own it.
+- Why drafts (not "done"): completing these is the legal responsibility of the DPO/Caldicott/CSO; an engineer
+  pre-filling the *factual/technical* parts accelerates them without crossing into decisions only those roles
+  may make. Both files carry a prominent "DRAFT — confers no compliance" banner, consistent with the honesty rule.
 ```
 
 ---
@@ -5955,4 +5975,214 @@ patient notifications.**
 - **Not** a substitute for the DSPT submission (`COMPLIANCE.md` §8) or the DPIA (§2).
 
 _Drafted 2026-06-01 (engineering aid). Owner before go-live: `%%RUNBOOK_OWNER%%` (DPO/SIRO)._
+```
+
+---
+
+
+## `governance/DPIA-DRAFT.md`
+
+```markdown
+# DPIA — Data Protection Impact Assessment (DRAFT / PRE-POPULATED)
+
+> **DRAFT. NOT a completed or approved DPIA.** This is an engineering-prepared
+> starting point that captures what the *code* already establishes (data flows,
+> minimisation, security controls). Every decision, risk acceptance, lawful-basis
+> determination and signature is a `%%PLACEHOLDER%%` for the Trust's **Data
+> Protection Officer** and **Caldicott Guardian** to complete and own. A DPIA is
+> **mandatory before go-live** for special-category (health) data (UK GDPR Art. 35).
+> Do not treat this file as evidence of compliance — it is scaffolding to accelerate
+> the real assessment.
+
+## Sign-off block (to be completed by the Trust)
+| Role | Name | Date | Signature |
+|---|---|---|---|
+| Data Protection Officer | `%%DPO_NAME%%` | `%%DATE%%` | `%%SIG%%` |
+| Caldicott Guardian | `%%CALDICOTT_NAME%%` | `%%DATE%%` | `%%SIG%%` |
+| SIRO | `%%SIRO_NAME%%` | `%%DATE%%` | `%%SIG%%` |
+| Information Asset Owner | `%%IAO_NAME%%` | `%%DATE%%` | `%%SIG%%` |
+
+---
+
+## 1. Need for a DPIA (screening)
+This processing is **high-risk** and a DPIA is required because it involves:
+- **Special-category data** — health data (waitlist/procedure status) (Art. 9).
+- **NHS Number** — a unique national identifier (stored on `waitlist_entries`).
+- **Vulnerable data subjects** — patients, including potentially elderly users and
+  (via proxy access) dependents.
+- **Large-scale** processing within an NHS Trust context.
+
+## 2. Description of the processing
+**Purpose:** keep elective-surgery waiting lists accurate by (a) letting patients
+confirm/decline their place via a PII-free SMS link, and (b) letting them view their
+own waitlist status in an authenticated portal.
+
+**Two surfaces (distinct data exposure):**
+| Surface | Auth | Data exposed to the client |
+|---|---|---|
+| SMS validation (`frontend/`) | Anonymous, single-use UUID token | **Zero PII** — only a random token in the URL |
+| Patient Hub portal (`portal/`) | NHS Login (OIDC), per-user JWT | The signed-in patient's own `procedure, status, referred_at, created_at` (no `nhs_number`, no `patient_user_id` sent to the browser) |
+
+**Data categories processed (server-side):**
+- NHS Number (`waitlist_entries.nhs_number`) — identity match key.
+- Health data — procedure + waitlist status.
+- Contact data — `sms_dispatch_jobs.patient_phone` (phone number).
+- Auth identity — `auth.users` (NHS Login subject), `patient_user_id` linkage.
+- Audit — `cancellation_reviews`, `validation_responses` (who/what/when).
+
+**Data flow:** `%%CONFIRM/EXPAND%%` — PAS/source populates `waitlist_entries`
+(incl. `nhs_number`) → token issued (`issue_validation_token`) → SMS dispatched
+(`sms_dispatch_jobs`) → patient responds (PII-free) **or** signs in via NHS Login,
+`link_my_waitlist_record()` matches `auth.uid()` to their row → portal shows own data.
+
+**Recipients / processors:** Supabase (DB/auth host), Vercel (static hosting/CDN),
+SMS provider `%%SMS_PROVIDER%%`, NHS Login (identity provider). `%%CONFIRM data
+processing agreements (Art. 28) in place for each%%`.
+
+**Retention:** tokens auto-purged (`purge_expired_tokens`); response retention is a
+`%%CALDICOTT/IG DECISION — set interval%%` (`purge_aged_validation_responses` exists
+but is deliberately unscheduled); erasure via `erase_patient_validation_data`.
+
+**International transfers / residency:** target region London (eu-west-2). `%%CONFIRM
+no data leaves the UK at any layer%%` (§7).
+
+## 3. Consultation
+- Data subjects / patient representatives: `%%RECORD consultation%%`
+- DPO advice: `%%DPO ADVICE%%`
+- Processors / security team: `%%RECORD%%`
+
+## 4. Necessity & proportionality
+- **Lawful basis (Art. 6):** likely `%%6(1)(e) public task%%` — DPO to confirm.
+- **Special-category condition (Art. 9):** likely `%%9(2)(h) health/social care%%` — confirm.
+- **Data minimisation (built):** SMS layer holds zero PII; portal client query is
+  restricted to non-PII columns; URL carries only a UUID. *(Evidence: COMPLIANCE §2.)*
+- **Proportionality of NHS Number storage:** required to match a verified NHS Login
+  identity to the correct clinical record; not exposed to the patient's browser.
+  `%%DPO to confirm this is the least-intrusive means%%`.
+
+## 5. Risks to individuals (DPO/Caldicott to score & accept)
+| # | Risk | Source / likelihood | Impact | Mitigation already in code | Residual (Trust to rate) |
+|---|---|---|---|---|---|
+| R1 | Wrong person sees a patient's data (IDOR) | Mis-scoped query | High | RLS `patient_user_id = auth.uid()`; client passes no id; portal selects non-PII cols | `%%RATE%%` |
+| R2 | Mis-delivered SMS → wrong recipient acts | SMS to wrong number | Med | PII-free URL; confirmation gate; reversible `PENDING_CANCELLATION` | `%%RATE%%` |
+| R3 | Irreversible wrongful cancellation | One-tap decline | High→Low | No hard-cancel on patient path; soft-state + clinician `resolve_cancellation`; audit ledger | `%%RATE%%` |
+| R4 | NHS Number exposed at rest | DB compromise | High | Admin-RLS-scoped, never to client; **encryption-at-rest still ❌ — Trust decision** | `%%RATE%%` |
+| R5 | Proxy used to over-reach into another's record | Loose authz | High | Verified/consented/time-bounded `patient_proxies`; staff-gated grant; fail-closed | `%%RATE%%` |
+| R6 | Session left open on shared/elderly device | Walk-away | Med | Idle auto sign-out + explicit sign-out | `%%RATE%%` |
+| R7 | Audit record altered to hide an action | Insider/DB admin | Med | Append-only ledgers + SHA-256 hash chain (`verify_audit_chain`) — tamper-evident | `%%RATE%%` |
+| R8 | `%%ADD any the Trust identifies%%` | | | | |
+
+## 6. Measures to reduce risk
+Engineering controls are catalogued in `COMPLIANCE.md` (§2/§3/§6/§10) and `SECURITY.md`.
+**Outstanding non-code measures (Trust):** at-rest encryption (R4), CREST pen test,
+Cyber Essentials Plus, admin MFA enforcement, DSPT, formal WCAG audit, and the
+processor DPAs above.
+
+## 7. Outcome (Trust to complete)
+- Residual risk acceptable? `%%YES/NO + rationale%%`
+- Approved to proceed? `%%DPO DECISION%%`  Review date: `%%DATE%%`
+- ICO prior consultation needed (Art. 36, if high residual risk)? `%%YES/NO%%`
+
+_Draft prepared 2026-06-01 (engineering). Owner: `%%DPO_NAME%%`. This draft confers no compliance._
+```
+
+---
+
+
+## `governance/HAZARD-LOG-DRAFT.md`
+
+```markdown
+# Clinical Risk — Hazard Log & Safety Case (DRAFT / PRE-POPULATED)
+
+> **DRAFT. NOT an approved Clinical Safety Case.** DCB0129 (manufacturer) /
+> DCB0160 (deploying org) are **mandatory** for clinical software and require a
+> **Clinical Safety Officer (CSO)** — a registered, suitably-qualified clinician —
+> to own the Hazard Log, assign risk scores, and approve the Safety Case Report.
+> This file is an engineering-prepared starting point: it captures the hazards the
+> build has been tracking and the mitigations already in code, in the standard
+> format, so the CSO starts from structured content. **All risk ratings and the
+> sign-off are `%%PLACEHOLDER%%` for the CSO.** Not evidence of clinical safety
+> assurance; confers no compliance.
+
+## Clinical Safety Officer & approval (to be completed)
+| Item | Value |
+|---|---|
+| Clinical Safety Officer | `%%CSO_NAME%% (registered clinician)` |
+| CSO registration / qualification | `%%DETAIL%%` |
+| Safety Case Report status | `%%DRAFT/APPROVED%%` |
+| Approval date | `%%DATE%%` |
+| Review trigger | every material change + at `%%INTERVAL%%` |
+
+## Risk matrix (DCB0129 standard — for reference; CSO applies it)
+Likelihood × Consequence → 1–5 risk score. Consequence ranges from *Minor* (no/low
+harm) to *Catastrophic* (death/multiple severe). **The CSO assigns initial and
+residual scores; the values below are deliberately left blank.**
+
+---
+
+## Hazard Log
+
+### HAZ-01 — Irreversible wrongful removal from a surgical waiting list
+- **Hazard:** a patient is removed from the waitlist when they should not be (delayed
+  or missed surgery → clinical deterioration).
+- **Cause(s):** one-tap "I no longer need this"; mis-delivered SMS; mistaken tap.
+- **Effect:** lost surgical slot; potential harm from delay.
+- **Initial risk:** `%%CSO RATE%%`
+- **Mitigations in place (code):**
+  - Patient path **cannot hard-cancel** — it writes only the reversible
+    `PENDING_CANCELLATION` (RLS `WITH CHECK`), never `CANCELLED`.
+  - Frontend **confirmation gate**; the safe "keep my place" option is focused first.
+  - Clinician-only `resolve_cancellation()` makes the CANCELLED/REINSTATE decision,
+    fully audited (`cancellation_reviews`).
+- **Residual risk:** `%%CSO RATE%%`
+- **Owner / further action:** define + staff the clinical-review SOP that consumes
+  `PENDING_CANCELLATION`; `%%CSO%%`.
+
+### HAZ-02 — Wrong-recipient data exposure / action
+- **Hazard:** SMS link reaches the wrong person, who sees data or acts on it.
+- **Mitigations:** PII-free URL (UUID only); single-use, expiring token; confirmation
+  gate; reversible soft-state so any wrong action is recoverable.
+- **Initial / residual risk:** `%%CSO RATE%%`
+- **Further action:** `%%confirm tamper-evident audit of who responded%%`.
+
+### HAZ-03 — "Symptoms worsened" response has no urgent-routing SLA
+- **Hazard:** a patient signals deterioration but no timely clinical follow-up occurs.
+- **Status:** the system **records** `SYMPTOMS_WORSENED` but does not itself route it.
+- **Initial risk:** `%%CSO RATE%%`
+- **Mitigation required (non-code):** define the clinical pathway + response-time
+  guarantee that consumes these responses. **OPEN — `%%CSO/Trust%%`.**
+
+### HAZ-04 — Patient sees another patient's record (mis-identification)
+- **Hazard:** wrong record shown → wrong clinical info, confidentiality breach.
+- **Mitigations:** RLS isolation on `auth.uid()`; identity match requires a **verified
+  P9 NHS Login** number (`link_my_waitlist_record`); fail-closed when unmatched.
+- **Initial / residual risk:** `%%CSO RATE%%`
+- **Further action:** verify NHS Login claim mapping in the live integration.
+
+### HAZ-05 — Proxy access shows the wrong / non-consented record
+- **Hazard:** a proxy sees a record they should not (no/withdrawn consent, expired).
+- **Mitigations:** `patient_proxies` requires active+consented+in-window; staff-gated
+  grant; `has_proxy_access` fail-closed; ships with zero grants.
+- **Initial / residual risk:** `%%CSO RATE%%`
+- **Further action (non-code):** Caldicott consent + identity verification of both
+  parties; lawful basis for under-16s / incapacity. **OPEN — `%%Caldicott%%`.**
+
+### HAZ-06 — Stale data shown due to caching
+- **Hazard:** patient acts on out-of-date status.
+- **Mitigations:** asset cache-busting; status read live under RLS at view time.
+- **Initial risk:** `%%CSO RATE%%`; **action:** `%%confirm acceptable staleness window%%`.
+
+### HAZ-07 — `%%ADD hazards identified during clinical review%%`
+- Each new feature must trigger a hazard review (living log).
+
+---
+
+## Safety Case summary (CSO to author)
+- **Scope of clinical use:** `%%DESCRIBE%%`
+- **Residual risk acceptable for deployment?** `%%CSO DECISION%%`
+- **Conditions / contraindications of use:** `%%LIST%%`
+- **Post-deployment surveillance:** how incidents feed back to this log
+  (`SECURITY-INCIDENT.md` links operational incidents to clinical review).
+
+_Draft prepared 2026-06-01 (engineering). Clinical ownership: `%%CSO_NAME%%`. This draft confers no clinical-safety assurance._
 ```
